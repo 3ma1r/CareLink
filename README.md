@@ -1,44 +1,95 @@
-# CareLink · Stage 1
+# CareLink · Stage 4
 
-A responsive caregiver PWA built with React, TypeScript, Vite, Tailwind CSS, React Router, Recharts, Lucide and Leaflet. The approved light/dark references guide the shared theme, rounded cards and mobile navigation.
+CareLink is a responsive React, TypeScript, Vite and Supabase caregiver PWA. Stage 4 connects the existing NodeMCU-32S wearable firmware to the deployed Stage 3 ingestion endpoint and shows the paired device's real measurements and GPS fixes. Stages 1–3 remain intact: caregiver authentication, patient ownership, secure device provisioning and pairing, RLS, idempotent ingestion, PWA behavior, themes, sensor screens, Blynk, SOS/SMS and fall detection.
 
-## Run locally
+## Web application
 
 Requires Node.js 22.12+ and npm.
 
 ```powershell
-cd C:\Users\3mair\Downloads\Capstone
 npm install
+Copy-Item .env.example .env
 npm run dev
 ```
 
-Open **http://localhost:3000**. For a production preview, including the service worker:
+The browser `.env` contains only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Never put a service-role key, device credential or pairing code in a `VITE_*` variable. Auth uses persisted PKCE sessions. Browser roles can select only the device and measurements related to their owned patient; they cannot ingest readings or access credential hashes.
 
-```powershell
-npm run build
-npm run preview
+The shared `DeviceProvider` fetches up to 2,000 measurements from the last 30 days and separately fetches the latest row as a fallback. It refreshes once per minute only while the tab is visible and online, and refreshes when the tab becomes visible or the browser reconnects. Dashboard, History and Location map database rows into the established chart and GPS models. A paired device with no measurements shows honest empty states. The sample adapter and demo controls are enabled only in test builds, so production never combines sample readings with wearable readings.
+
+## Backend contract
+
+The deployed `device-ingest` Edge Function accepts HTTPS `POST` requests with:
+
+```text
+Content-Type: application/json
+x-carelink-device-id: CL-XXXXXXXXXXXX
+Authorization: Device <64-character credential>
 ```
 
-Open **http://localhost:4173**. PWA installation requires localhost or HTTPS and browser support. Visit online first to cache the app shell. Tiles require an internet connection and are not cached for offline use.
+The body contains `firmware_version` and one to ten `measurements`. Each measurement uses a durable `message_id`, UTC `measured_at`, nullable `heart_rate`, `spo2`, `sensor_temperature` and `movement`, quality (`good`, `unstable` or `missing`), plus optional valid `latitude`, `longitude` and `gps_fix_at`. The server validates ranges, rejects stale/future timestamps and deduplicates `(device_id, message_id)`. Retried packets retain their original ID and measurement time.
 
-## Implemented
+The Stage 2 and Stage 3 database definitions and checks remain in `supabase/migrations` and `supabase/tests`. Hosted functions are in `supabase/functions`. `ALLOWED_ORIGIN=http://localhost:3000` is configured on the existing CareLink project.
 
-- Dashboard with fictional caregiver Omair and patient Ahmed, 72, Muscat; patient/device summaries; date selection; vital sparklines; movement; fall status; filtered trend; AI presentation states; History access.
-- Health History with three metrics, day/week/month/custom periods, short chart windows, keyboard-accessible Recharts tooltips, period summaries, movement, event markers and recent readings. The PDF button opens a report preview and explicitly explains that export is pending.
-- Alerts with All/New/Viewed/Resolved filters and session-only actions. Cancelled suspected falls and escalated, uncancelled suspected falls have distinct descriptions. No fall is described as independently verified.
-- Location with attributed OpenStreetMap tiles, recenter/zoom, exact displayed coordinates and an external Maps link. Blocked/offline tiles show a labelled illustrative preview. Unavailable/invalid GPS never produces a marker or a Maps link.
-- Profile with session-only patient edits, optional local avatar, device details, persistent System/Light/Dark themes and disabled notification previews.
-- Manifest, PNG icons including a maskable icon, standalone display, a precached app-shell navigation fallback, safe areas, keyboard focus, reduced-motion support and a browser-offline banner.
+## Trusted provisioning and pairing
 
-## Demo model
+1. On a trusted administrator machine, copy `.env.provisioning.example` to ignored `.env.provisioning.local` and set its privileged provisioning values.
+2. Run `npm run device:provision`.
+3. Securely record the one-time displayed device ID, permanent device credential and pairing code. The credential cannot be recovered later.
+4. Copy `firmware/CareLinkWearable/secrets.example.h` to ignored `secrets.h`. Put only the device ID and permanent credential there with the Wi-Fi, Blynk and caregiver phone values. Put no Supabase user, publishable or service-role key on the wearable.
+5. Compile and upload `firmware/CareLinkWearable` to the physical NodeMCU-32S.
+6. Sign into CareLink as the caregiver.
+7. Complete patient setup if the account has no patient.
+8. Open **Pair wearable** and enter the same device ID and unused temporary pairing code. Codes expire after 30 minutes by default and lock after five incorrect attempts.
+9. If the device has not uploaded, confirm the UI says **Paired — awaiting first connection**.
+10. Power the wearable and confirm serial output shows time synchronization, queueing and an HTTP 200 upload.
+11. Verify Profile has distinct **Last contact** and **Last measured** values and Dashboard, History and Location show the real packet.
+12. Attempt the original pairing code again only in the controlled verification flow and confirm it cannot be reused.
 
-The fixed sample clock is **14 September 2026, 12:00 GST (UTC+4, Muscat)**. “Today” always refers to this sample day. The latest typical measurement is 11:59, last device contact is 11:59:45, and last GPS fix is 11:58. Renders, navigation and filters never refresh these times. All screens say that the readings are samples, including when offline.
+Rotate a credential by unpairing and running trusted provisioning again. Unpairing preserves historical rows but revokes the credential and removes caregiver access. Reflash `secrets.h` with the new credential before reconnecting. The Stage 3 simulator remains available for backend diagnosis via `npm run device:simulate`; it is not used by the normal production UI.
 
-Use **Demo controls** near the page footer to explore typical readings, device offline, missing/unstable vitals, stale/unavailable GPS, SOS, suspected fall and empty history. The adjacent AI control previews six reusable presentation states; none runs an AI model. Scenario changes reset alert actions; a page reload resets patient/demo state. Only the theme preference is stored in localStorage.
+## Firmware build and libraries
 
-`src/data/demo.ts` owns typed readings, alert/location snapshots, validity checks, date filters and summaries. `CareDataSource` is the small replacement boundary for a later protected backend client. Invalid/non-finite/missing vital values become chart gaps and are excluded from statistics. Sensor temperature is explicitly not validated core body temperature. Summary cards cover the full selected period; the 1H/6H/24H controls narrow only the chart window. Daily movement bars aggregate valid movement samples.
+The sketch targets **NodeMCU-32S** using Arduino ESP32 core **2.0.17**. Stage 4 was compiled with Arduino CLI **1.5.1** and these installed libraries:
 
-Local, original SVG illustrations live at `public/assets/patient-avatar.svg` and `public/assets/wearable.svg`; replace these paths to update the imagery. They do not reuse the reference screenshots. App PNG icons are checked in and can be regenerated on Windows using `powershell -File scripts/generate-icons.ps1`.
+- Blynk 1.3.5
+- MAX30100lib 1.2.1
+- Adafruit MLX90614 Library 2.1.6
+- Adafruit MPU6050 2.2.9
+- U8g2 2.36.19
+- TinyGPSPlus 1.0.3
+- ArduinoJson 7.4.3
+
+Arduino Library Manager also installs Adafruit BusIO 1.17.4, Adafruit Unified Sensor 1.1.15, Adafruit GFX Library 1.12.6 and Adafruit SSD1306 2.5.17. BlynkNcpDriver 0.7.0 is installed with Blynk.
+
+The repository-local CLI setup used for verification is ignored. Equivalent commands are:
+
+```powershell
+arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli core install esp32:esp32@2.0.17
+arduino-cli lib install Blynk@1.3.5 MAX30100lib@1.2.1 "Adafruit MLX90614 Library@2.1.6" "Adafruit MPU6050@2.2.9" U8g2@2.36.19 TinyGPSPlus@1.0.3 ArduinoJson@7.4.3
+arduino-cli compile --fqbn esp32:esp32:nodemcu-32s firmware/CareLinkWearable
+arduino-cli upload --fqbn esp32:esp32:nodemcu-32s --port COMx firmware/CareLinkWearable
+arduino-cli monitor --port COMx --config baudrate=115200
+```
+
+The actual firmware keeps these hardware assignments: I²C SDA GPIO 21 and SCL GPIO 22 for MAX30100, MLX90614, MPU-6050 and SH1106 OLED; GPS UART1 RX GPIO 4 and TX GPIO 5 at 9,600 baud; GSM UART2 RX GPIO 16 and TX GPIO 17 at 115,200 baud; SOS button GPIO 0 with pull-up and falling-edge interrupt. Replace `COMx` with the board port. Save the working sketch and private `secrets.h` before flashing the board.
+
+The firmware obtains UTC from NTP and refuses to queue a measurement until the clock is plausible, avoiding false epoch timestamps. Each completed vitals cycle gets a random UUID v4 before it is stored. LittleFS retains an oldest-first NDJSON queue across resets; it holds 64 readings, uploads batches of five, removes rows only after the server confirms every item as inserted or duplicate, and records/logs overflow drops. Failed requests keep their rows and use capped exponential backoff with jitter; authentication failures wait 15 minutes. HTTPS uses `WiFiClientSecure` with a CA root and never calls `setInsecure()` or pins a leaf certificate.
+
+On 2026-09-15 the deployed host presented `supabase.co → Google Trust Services WE1 → GTS Root R4 → GlobalSign Root CA`. The tracked GlobalSign root expires 2028-01-28. Re-check the live chain and update `carelink_root_ca.h` before that date or if TLS validation begins failing.
+
+The device credential is stored in ESP32 flash in this controlled capstone prototype. A production medical device should use secure hardware storage, secure boot and flash encryption with a managed rotation process.
+
+Uploads run in a FreeRTOS task pinned away from the Arduino loop. The existing sensor stages continue servicing `pox.update()`, GPS, OLED, fall detection, SOS and Blynk. Wi-Fi connection starts without the former eight-second setup wait. No board was flashed and no physical sensor behavior is claimed until verified on the actual wearable.
+
+## Troubleshooting
+
+- **Clock is not synchronized:** confirm Wi-Fi and UDP/NTP access. Measurements are intentionally not timestamped or queued before valid time is available.
+- **HTTP 401:** confirm the device ID and credential came from the same latest provisioning run and that the device is active. Do not print the credential.
+- **TLS failure:** confirm the wall clock first, then inspect the endpoint's current certificate chain and update the trusted root if it changed. Never use `setInsecure()` as a workaround.
+- **Queue grows:** inspect Wi-Fi, TLS and HTTP serial messages. The oldest reading is dropped only after the persistent queue reaches 64 rows; a persistent drop counter is printed at boot.
+- **Paired but no readings:** check firmware serial logs and Profile's Last contact/Last measured fields. The UI does not replace missing real rows with samples.
+- **No map marker:** GPS fields are sent only for a recent, finite, non-zero fix within valid latitude/longitude ranges.
 
 ## Verification
 
@@ -48,12 +99,24 @@ npm run lint
 npm run test
 npm run build
 npm run test:e2e
+npm audit
 ```
 
-The browser suite uses installed Google Chrome in headless mode and starts its own production preview on port 4173 (keep that port free). It checks 320/390/768/1440px layouts in both themes, navigation, theme persistence, profile edits, date/metric filters, chart tooltips, alert actions, demo states, report preview, GPS fallback, offline route loading and accessibility. Screenshots and browser reports are written to ignored `qa/`. Run the production build before browser tests after making changes. Data tests cover validity, statistics, timestamp separation, date boundaries, alert linkage and coordinate validation.
+The web tests use an isolated test-mode adapter. Unit tests cover real measurement mapping, null/quality behavior and GPS fix selection. Database tests cover pairing, RLS, ingestion, null preservation, retry deduplication and revocation. Physical verification still requires flashing the real NodeMCU-32S, observing sensor cadence and reset recovery, interrupting Wi-Fi to exercise the LittleFS queue, and confirming delayed rows arrive once each with their original timestamps.
 
-## Remaining stages
+Use this physical end-to-end checklist after provisioning:
 
-No Supabase connection, backend, real authentication, pairing, firmware changes, deployment, Python/AI analysis, notification delivery, background monitoring or PDF generation is implemented. OpenStreetMap tiles are the only external data request; clicking Open in Maps opens the displayed fictional coordinates in a new tab. The profile does not collect passwords. This is a monitoring prototype, not a medical device or medical assessment.
+1. Pair the device and confirm the one-time pairing code cannot be reused.
+2. Before the first upload, confirm **Paired — awaiting first connection**.
+3. Watch the MAX30100, other sensor and OLED diagnostics continue while HTTPS runs.
+4. Confirm one real row, its original `measured_at`, and separate Last contact/Last measured values in the app.
+5. Resend the same queued record and confirm the database still contains one `(device_id, message_id)` row.
+6. Disconnect Wi-Fi, capture several cycles, restart once, then reconnect and verify oldest-first delivery with unchanged IDs/timestamps.
+7. Wait past two minutes and confirm offline status, then upload and confirm online recovery.
+8. Confirm missing sensor values remain unavailable, invalid/missing GPS produces no `0,0`, and a valid fix appears with its own time.
+9. Using a separate caregiver account, confirm RLS denies the device and measurements.
+10. Unpair, confirm the credential can no longer ingest, then reprovision before using the physical device again.
 
-Future stages can replace the demo adapter, connect the protected backend/wearable and AI service, and implement reporting. Stage 1 ends here.
+## Stage 5 remains
+
+AI analysis, automatic alert generation, push notifications, caregiver notification delivery and production reporting are intentionally deferred. Stage 4 adds no AI inference, alert automation or notification sending.

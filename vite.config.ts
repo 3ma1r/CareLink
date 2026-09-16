@@ -39,7 +39,7 @@ export default defineConfig({
     }),
   ],
   build: {
-    rollupOptions: { output: { manualChunks: { charts: ['recharts'], maps: ['leaflet'] } } },
+    rollupOptions: { output: { manualChunks: { charts: ['recharts'], maps: ['leaflet'], supabase: ['@supabase/supabase-js'] } } },
   },
   server: { port: 3000 },
 })

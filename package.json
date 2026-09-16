@@ -1,21 +1,25 @@
 {
   "name": "carelink",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "build:test": "tsc -b && vite build --mode test",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "vitest run src/data",
+    "test": "vitest run src",
     "test:e2e": "playwright test",
+    "device:provision": "node --env-file=.env.provisioning.local scripts/provision-device.mjs",
+    "device:simulate": "node --env-file=.env.simulator.local scripts/device-simulator.mjs",
     "format": "prettier --write src tests *.ts *.json *.js index.html README.md"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.2.6",
     "@fontsource/manrope": "^5.2.6",
+    "@supabase/supabase-js": "2.116.0",
     "@tailwindcss/vite": "^4.1.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",

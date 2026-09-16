@@ -1,0 +1,7 @@
+project_id = "carelink"
+
+[functions.pair-device]
+verify_jwt = false
+
+[functions.device-ingest]
+verify_jwt = false

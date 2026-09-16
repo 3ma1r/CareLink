@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Bell,
   Check,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { useCare } from '../state'
 import { formatValue, metrics, stamp, validCoordinates, validValue } from '../data/demo'
-import type { AlertStatus, CareAlert, Metric } from '../data/demo'
+import type { AlertStatus, Metric } from '../data/demo'
 import { Badge, EmptyState, Modal, PageHeading, Segments } from '../components/UI'
 const eventIcons = { fall: TriangleAlert, sos: Radio, reading: Signal }
 export default function Alerts() {
@@ -25,9 +25,6 @@ export default function Alerts() {
   const selected = alerts.find((a) => a.id === params.get('event'))
   const filtered = alerts.filter((a) => filter === 'All' || a.status === filter)
   const newCount = alerts.filter((a) => a.status === 'New').length
-  function open(a: CareAlert) {
-    setParams({ event: a.id })
-  }
   function action(status: AlertStatus) {
     if (selected) {
       updateAlert(selected.id, status)
@@ -77,10 +74,10 @@ export default function Alerts() {
           filtered.map((a) => {
             const Icon = eventIcons[a.type]
             return (
-              <button
+              <Link
                 key={a.id}
                 className={`alert-card card ${a.status === 'New' ? 'unread' : ''}`}
-                onClick={() => open(a)}
+                to={`?event=${a.id}`}
               >
                 <span className={`alert-type-icon ${a.severity.toLowerCase()}`}>
                   <Icon size={24} />
@@ -115,7 +112,7 @@ export default function Alerts() {
                   </div>
                 </div>
                 <ChevronRight className="alert-chevron" size={21} />
-              </button>
+              </Link>
             )
           })
         ) : (

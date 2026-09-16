@@ -15,11 +15,9 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { useCare } from '../state'
+import { useAuth } from '../auth/AuthProvider'
 import {
   DAY,
-  FIRST_DAY,
-  SAMPLE_NOW,
-  TODAY,
   dateKey,
   dateLabel,
   dayStart,
@@ -41,12 +39,17 @@ import {
 } from '../components/UI'
 import { HealthChart, MovementChart } from '../components/Charts'
 import { AIInsights } from '../components/AIInsights'
+import { useDevice } from '../device/DeviceProvider'
 const icons = { heartRate: Heart, spo2: Droplets, temperature: Thermometer }
 export default function Dashboard() {
-  const { patient, readings, scenario, alerts } = useCare()
-  const [day, setDay] = useState(TODAY)
+  const { patient, readings, scenario, alerts, sampleMode, dataNow } = useCare()
+  const { profile } = useAuth()
+  const { connection } = useDevice()
+  const today = dateKey(dataNow)
+  const firstDay = dateKey(dataNow - 29 * DAY)
+  const [day, setDay] = useState(today)
   const [range, setRange] = useState('6H')
-  const end = Math.min(dayStart(day) + DAY - 1, SAMPLE_NOW)
+  const end = Math.min(dayStart(day) + DAY - 1, dataNow)
   const selected = filterReadings(readings, dayStart(day), end)
   const latest = selected.at(-1)
   const chartRows = filterReadings(selected, end - Number.parseInt(range) * 3600000, end)
@@ -54,13 +57,14 @@ export default function Dashboard() {
   return (
     <>
       <PageHeading
-        title="Good morning, Omair"
+        title={`Good morning, ${profile?.full_name?.split(/\s+/)[0] || 'Caregiver'}`}
         subtitle={<>A little closer, even from afar. Here’s {patient.name}’s latest update.</>}
         action={
           <div className="heading-date">
             <CalendarDays size={19} />
             <span>
-              Monday, 14 September 2026<small>Sample timeline · Muscat, GST</small>
+              {dateLabel(dataNow, true)}
+              <small>{sampleMode ? 'Sample timeline' : 'Current data'} · Muscat, GST</small>
             </span>
           </div>
         }
@@ -73,7 +77,7 @@ export default function Dashboard() {
             <h2>{patient.name}</h2>
             <p>
               {patient.age} years <span>·</span> <MapPin size={14} />
-              {patient.city}, Oman
+              {sampleMode ? 'Sample location' : 'Last known area'} · {patient.city}, Oman
             </p>
           </div>
           <Link to="/profile" className="icon-button" aria-label="View patient profile">
@@ -84,15 +88,15 @@ export default function Dashboard() {
       </div>
       <div className="overview-heading">
         <h2>
-          Your daily overview <span className="subtle-count">4 measurements</span>
+          Your daily overview <span className="subtle-count">{selected.length} measurements</span>
         </h2>
         <div className="date-controls">
           <Segments
             label="Dashboard day"
             value={day}
             options={[
-              { value: TODAY, label: 'Today' },
-              { value: dateKey(SAMPLE_NOW - DAY), label: 'Yesterday' },
+              { value: today, label: 'Today' },
+              { value: dateKey(dataNow - DAY), label: 'Yesterday' },
             ]}
             onChange={setDay}
           />
@@ -102,8 +106,8 @@ export default function Dashboard() {
               type="date"
               aria-label="Dashboard date"
               value={day}
-              min={FIRST_DAY}
-              max={TODAY}
+              min={firstDay}
+              max={today}
               onChange={(e) => e.target.value && setDay(e.target.value)}
             />
           </label>
@@ -137,7 +141,7 @@ export default function Dashboard() {
                     : 'No readings'
                   : metric === 'temperature'
                     ? 'Wearable sensor reading'
-                    : 'Latest valid sample'}
+                    : 'Latest valid reading'}
               </div>
               <HealthChart readings={selected.slice(-16)} metric={metric} small />
             </Link>
@@ -155,7 +159,7 @@ export default function Dashboard() {
             {latest?.movement == null ? 'Unavailable' : latest.movement < 25 ? 'Resting' : 'Active'}
           </div>
           <div className="vital-caption">
-            {latest?.movement == null ? 'No movement sample' : 'Latest activity sample'}
+            {latest?.movement == null ? 'No movement reading' : 'Latest activity reading'}
           </div>
           <MovementChart readings={selected.slice(-16)} small />
         </Link>
@@ -164,8 +168,8 @@ export default function Dashboard() {
         <Clock3 size={13} />
         Last measured · {latest ? stamp(latest.time) : 'No measurements'}{' '}
         <span>
-          · {day === TODAY ? 'Today' : dateLabel(dayStart(day))} · Sample data
-          {scenario === 'offline' ? ' · Device offline, readings are stale' : ''}
+          · {day === today ? 'Today' : dateLabel(dayStart(day))} · {sampleMode ? 'Sample data' : 'Wearable data'}
+          {scenario === 'offline' || (!sampleMode && connection === 'offline') ? ' · Device offline, readings are stale' : ''}
         </span>
       </div>
       <div className="dashboard-grid">
@@ -184,7 +188,7 @@ export default function Dashboard() {
                 </strong>
                 <span>
                   <i className="legend-dot" />
-                  Heart rate · sample readings
+                  Heart rate · {sampleMode ? 'sample readings' : 'wearable readings'}
                 </span>
               </div>
               <Segments
@@ -238,7 +242,7 @@ export default function Dashboard() {
         </aside>
       </div>
       <div className="page-bottom-note">
-        <Badge tone="muted">Demo — sample data</Badge>
+        <Badge tone="muted">{sampleMode ? 'Demo — sample data' : 'Paired wearable data'}</Badge>
         <span>Thoughtfully connected. Always with care.</span>
       </div>
     </>

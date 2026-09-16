@@ -14,17 +14,20 @@ import {
 import { dateLabel, formatValue, metrics, stamp, timeLabel, validValue } from '../data/demo'
 import type { CareAlert, Metric, Reading } from '../data/demo'
 import { EmptyState } from './UI'
+import { useCare } from '../state'
 type ChartPoint = Reading & { value: number | null; bucketEnd?: number }
 function ChartTooltip({
   active,
   payload,
   metric,
   movement,
+  sampleMode,
 }: {
   active?: boolean
   payload?: { payload: ChartPoint }[]
   metric: Metric
   movement?: boolean
+  sampleMode: boolean
 }) {
   if (!active || !payload?.length) return null
   const row = payload[0].payload
@@ -44,7 +47,7 @@ function ChartTooltip({
       )}
       <small>
         Quality: {movement ? (row.movement === null ? 'Missing' : 'Good') : row.quality[metric]} ·
-        Demo
+        {sampleMode ? 'Demo' : 'Wearable'}
       </small>
     </div>
   )
@@ -62,8 +65,15 @@ export function HealthChart({
   alerts?: CareAlert[]
   multiDay?: boolean
 }) {
+  const { sampleMode } = useCare()
   const gradientId = useId().replace(/:/g, '')
-  const data: ChartPoint[] = readings.map((row) => ({ ...row, value: validValue(row, metric) }))
+  const data: ChartPoint[] = readings.flatMap((row, index) => {
+    const point = { ...row, value: validValue(row, metric) }
+    const previous = readings[index - 1]
+    return previous && row.time - previous.time > 5 * 60_000
+      ? [{ ...previous, id: `gap-${previous.id}-${row.id}`, time: previous.time + 1, value: null }, point]
+      : [point]
+  })
   const hasValues = data.some((r) => r.value !== null)
   if (!hasValues)
     return small ? (
@@ -124,7 +134,7 @@ export function HealthChart({
                 tickCount={4}
               />
               <Tooltip
-                content={<ChartTooltip metric={metric} />}
+                content={<ChartTooltip metric={metric} sampleMode={sampleMode} />}
                 cursor={{ stroke: 'var(--accent)', strokeDasharray: '3 3' }}
               />
               {alerts
@@ -172,6 +182,7 @@ export function MovementChart({
   small?: boolean
   multiDay?: boolean
 }) {
+  const { sampleMode } = useCare()
   if (!readings.some((r) => r.movement !== null))
     return small ? (
       <div className="sparkline-empty">No movement data</div>
@@ -230,7 +241,7 @@ export function MovementChart({
                 tick={{ fill: 'var(--muted)', fontSize: 11 }}
               />
               <Tooltip
-                content={<ChartTooltip metric="heartRate" movement />}
+                content={<ChartTooltip metric="heartRate" movement sampleMode={sampleMode} />}
                 cursor={{ fill: 'var(--accent-soft)' }}
               />
             </>

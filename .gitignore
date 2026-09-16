@@ -3,6 +3,10 @@ dist/
 build/
 .env
 .env.*
+!.env.example
+!.env.provisioning.example
+!.env.simulator.example
+.carelink-simulator-message.json
 /.idea/
 .vscode/
 .DS_Store
@@ -10,7 +14,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 coverage/
@@ -33,3 +36,6 @@ dist/
 *.local
 *.log
 qa/
+firmware/**/secrets.h
+/.arduino/
+/.tools/

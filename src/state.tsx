@@ -3,16 +3,17 @@ import type { ReactNode } from 'react'
 import { demoSource } from './data/demo'
 import type { AIState, AlertStatus, Patient, Scenario } from './data/demo'
 import { useConnectivity } from './hooks/useConnectivity'
+import { useAuth } from './auth/AuthProvider'
+import { calculateAge } from './auth/validation'
+import { useDevice } from './device/DeviceProvider'
+import type { Reading } from './data/demo'
+import { findLatestGps, mapMeasurement } from './device/measurements'
 type Theme = 'system' | 'light' | 'dark'
 function useStore() {
   const [scenario, setScenario] = useState<Scenario>('typical')
   const [aiState, setAiState] = useState<AIState>('awaiting')
-  const [patient, setPatient] = useState<Patient>({
-    name: 'Ahmed',
-    age: 72,
-    city: 'Muscat',
-    avatar: true,
-  })
+  const auth = useAuth()
+  const wearable = useDevice()
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const saved = localStorage.getItem('carelink-theme')
@@ -26,7 +27,26 @@ function useStore() {
   )
   const online = useConnectivity()
   const [statuses, setStatuses] = useState<Record<string, AlertStatus>>({})
-  const snapshot = useMemo(() => demoSource.getSnapshot(scenario), [scenario])
+  const sampleMode = import.meta.env.MODE === 'test'
+  const sampleSnapshot = useMemo(() => demoSource.getSnapshot(scenario), [scenario])
+  const realReadings = useMemo<Reading[]>(
+    () => wearable.measurements.map(mapMeasurement),
+    [wearable.measurements],
+  )
+  const latestGps = useMemo(
+    () => findLatestGps(wearable.measurements),
+    [wearable.measurements],
+  )
+  const snapshot = sampleMode ? sampleSnapshot : {
+    readings: realReadings,
+    alerts: [],
+    lastContact: wearable.device?.last_contact_at ? Date.parse(wearable.device.last_contact_at) : 0,
+    location: {
+      coordinates: latestGps ? [latestGps.latitude!, latestGps.longitude!] as [number, number] : null,
+      time: latestGps?.gps_fix_at ? Date.parse(latestGps.gps_fix_at) : null,
+      stale: !latestGps?.gps_fix_at || Date.now() - Date.parse(latestGps.gps_fix_at) > 15 * 60_000,
+    },
+  }
   const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme
   useEffect(() => {
     const query = matchMedia('(prefers-color-scheme: dark)')
@@ -46,6 +66,12 @@ function useStore() {
     }
   }, [theme, resolvedTheme])
   const alerts = snapshot.alerts.map((a) => ({ ...a, status: statuses[a.id] ?? a.status }))
+  const patient: Patient = {
+    name: auth.patient?.full_name ?? '',
+    age: auth.patient ? (calculateAge(auth.patient.date_of_birth) ?? 0) : 0,
+    city: 'Muscat',
+    avatar: false,
+  }
   function changeScenario(value: Scenario) {
     setScenario(value)
     setStatuses({})
@@ -58,11 +84,12 @@ function useStore() {
     aiState,
     setAiState,
     patient,
-    setPatient,
     theme,
     setTheme,
     resolvedTheme,
     online,
+    sampleMode,
+    dataNow: sampleMode ? Date.parse('2026-09-14T12:00:00+04:00') : Date.now(),
     updateAlert: (id: string, status: AlertStatus) => setStatuses((s) => ({ ...s, [id]: status })),
   }
 }

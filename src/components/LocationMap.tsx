@@ -5,7 +5,7 @@ import { useCare } from '../state'
 import { validCoordinates } from '../data/demo'
 
 export function LocationMap() {
-  const { location, online, patient } = useCare()
+  const { location, online, patient, sampleMode } = useCare()
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -60,7 +60,7 @@ export function LocationMap() {
     if (patient.avatar) {
       const portrait = document.createElement('img')
       portrait.src = '/assets/patient-avatar.svg'
-      portrait.alt = 'Sample patient marker'
+      portrait.alt = sampleMode ? 'Sample patient marker' : 'Patient location marker'
       markerContent.append(portrait)
     } else {
       const initials = document.createElement('span')
@@ -74,15 +74,15 @@ export function LocationMap() {
       iconSize: [62, 72],
       iconAnchor: [31, 70],
     })
-    L.marker([lat, lng], { icon, alt: 'Sample patient location' })
+    L.marker([lat, lng], { icon, alt: sampleMode ? 'Sample patient location' : 'Patient location' })
       .addTo(map)
-      .bindPopup('Fictional sample location. See the GPS-fix time below.')
+      .bindPopup(sampleMode ? 'Fictional sample location. See the GPS-fix time below.' : 'Wearable-reported location. See the GPS-fix time below.')
     return () => {
       window.clearTimeout(timeout)
       map.remove()
       mapRef.current = null
     }
-  }, [lat, lng, online, retry, patient.avatar, patient.name])
+  }, [lat, lng, online, retry, patient.avatar, patient.name, sampleMode])
   const available = validCoordinates(location.coordinates)
   const preview = !online || failed || !loaded
   return (
@@ -91,7 +91,7 @@ export function LocationMap() {
         ref={container}
         className="leaflet-map"
         role="region"
-        aria-label="Map showing fictional sample coordinates in Muscat"
+        aria-label={sampleMode ? 'Map showing fictional sample coordinates in Muscat' : 'Map showing the last wearable GPS coordinates'}
         style={{ visibility: available && !preview ? 'visible' : 'hidden' }}
       />
       {(!available || preview) && (
@@ -140,7 +140,7 @@ export function LocationMap() {
             </strong>
             <p>
               {available
-                ? 'Sample coordinates and the Maps link remain available below.'
+                ? `${sampleMode ? 'Sample' : 'Wearable'} coordinates and the Maps link remain available below.`
                 : 'A marker will appear only after a valid GPS fix.'}
             </p>
             {available && online && failed && (
@@ -160,10 +160,10 @@ export function LocationMap() {
       )}
       {available && !preview && (
         <>
-          <span className="map-live-label">Sample patient location</span>
+          <span className="map-live-label">{sampleMode ? 'Sample patient location' : 'Wearable GPS location'}</span>
           <button
             className="map-recenter icon-button"
-            aria-label="Center map on sample patient"
+            aria-label={sampleMode ? 'Center map on sample patient' : 'Center map on patient location'}
             onClick={() => {
               if (location.coordinates) mapRef.current?.setView(location.coordinates, 14)
             }}

@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom'
 import { useCare } from '../state'
 import { formatValue, metrics, stamp, summarize } from '../data/demo'
 import type { Metric, Reading } from '../data/demo'
+import { useDevice } from '../device/DeviceProvider'
 
 export function Brand() {
   return (
@@ -164,21 +165,24 @@ export function Segments<T extends string>({
   )
 }
 export function DeviceCard({ compact = false }: { compact?: boolean }) {
-  const { scenario, lastContact } = useCare()
-  const offline = scenario === 'offline'
+  const { device, connection, loading, error, refresh } = useDevice()
+  if (error) return <section className={`device-card ${compact ? 'compact' : ''}`} role="status"><span className="device-status-icon"><WifiOff size={22}/></span><div><strong>Wearable data unavailable</strong><p>{error}</p><button type="button" className="text-link" onClick={() => void refresh()}>Try again</button></div></section>
+  const offline = connection === 'offline'
+  const status = loading ? 'Checking wearable…' : connection === 'none' ? 'No wearable paired' : connection === 'awaiting' ? 'Paired — awaiting first connection' : offline ? 'Wearable offline' : 'Wearable online'
+  const when = device?.last_contact_at ? new Date(device.last_contact_at).toLocaleString([], { dateStyle:'medium', timeStyle:'short' }) : 'No contact yet'
   return (
     <Link
-      to="/profile#device"
+      to={device ? '/profile#device' : '/pair-device'}
       className={`device-card ${compact ? 'compact' : ''} ${offline ? 'device-offline' : ''}`}
     >
       <span className="device-status-icon">
         {offline ? <WifiOff size={22} /> : <Check size={23} />}
       </span>
       <div>
-        <strong>Wearable {offline ? 'offline' : 'connected'}</strong>
-        <p>Last contact · {stamp(lastContact, true)}</p>
+        <strong>{status}</strong>
+        <p>Last contact · {when}</p>
         <small>
-          {offline ? 'No new measurements since disconnect' : 'Demo connection · CareLink Band'}
+          {device ? `${device.display_name ?? device.device_model} · Real pairing status` : 'Pairing required · Monitoring is not active'}
         </small>
       </div>
       {!compact && (
@@ -212,18 +216,19 @@ export function Stats({ readings, metric }: { readings: Reading[]; metric: Metri
 }
 export function EmptyState({
   title = 'No readings for this period',
-  detail = 'Choose another date or change the demo scenario to explore sample readings.',
+  detail,
 }: {
   title?: string
   detail?: string
 }) {
+  const { sampleMode } = useCare()
   return (
     <div className="empty-state">
       <span className="icon-tile">
         <Activity size={27} />
       </span>
       <h3>{title}</h3>
-      <p>{detail}</p>
+      <p>{detail ?? (sampleMode ? 'Choose another date or change the demo scenario to explore sample readings.' : 'No wearable measurements were recorded in the selected period.')}</p>
     </div>
   )
 }
@@ -276,14 +281,14 @@ export function Modal({
   )
 }
 export function LocationSummary() {
-  const { location, patient } = useCare()
+  const { location, patient, sampleMode } = useCare()
   return (
     <Link to="/location" className="location-summary">
       <span className="icon-tile">
         <MapPin size={22} />
       </span>
       <div>
-        <strong>{location.coordinates ? `${patient.city}, Oman` : 'Location unavailable'}</strong>
+        <strong>{location.coordinates ? `${sampleMode ? 'Sample' : 'Last known'} location · ${patient.city}, Oman` : 'Location unavailable'}</strong>
         <p>
           {location.time ? `Last GPS fix · ${stamp(location.time)}` : 'Waiting for a valid GPS fix'}
         </p>
@@ -293,10 +298,11 @@ export function LocationSummary() {
   )
 }
 export function PrototypeNote() {
+  const { sampleMode } = useCare()
   return (
     <div className="prototype-note">
       <Watch size={16} />
-      <span>Monitoring prototype · Sample data only · Not a medical device</span>
+      <span>Monitoring prototype · {sampleMode ? 'Sample data only' : 'Wearable sensor data'} · Not a medical device</span>
     </div>
   )
 }

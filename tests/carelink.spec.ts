@@ -51,22 +51,15 @@ test('theme, patient editing, navigation, and all AI presentation states work', 
     .getByRole('navigation', { name: 'Mobile navigation' })
     .getByRole('link', { name: 'Profile' })
     .click()
-  await page.getByLabel('Patient name', { exact: true }).fill('Ahmed Ali')
-  await page.getByLabel('City', { exact: true }).fill('Seeb')
+  await page.getByLabel('Patient full name').fill('Ahmed Ali')
   await page.getByRole('button', { name: 'Save changes' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Demo details saved' })).toBeVisible()
-  await page.getByLabel('Show patient avatar').uncheck()
-  await page.getByRole('button', { name: 'Save changes' }).click()
-  await expect(page.locator('.patient-avatar-settings .initials')).toBeVisible()
-  await page.getByLabel('Show patient avatar').check()
-  await expect(page.locator('.patient-avatar-settings img')).toBeVisible()
-  await page.getByRole('button', { name: 'Save changes' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Account and patient details saved' })).toBeVisible()
   await page
     .getByRole('navigation', { name: 'Mobile navigation' })
     .getByRole('link', { name: 'Dashboard' })
     .click()
   await expect(page.locator('.patient-name')).toContainText('Ahmed Ali')
-  await expect(page.locator('.patient-name')).toContainText('Seeb')
+  await expect(page.locator('.patient-name')).toContainText('Sample location')
   await setScenario(page, 'Typical valid readings')
   for (const state of ['learning', 'usual', 'unusual', 'insufficient', 'unavailable']) {
     await page.getByLabel('AI presentation preview').selectOption(state)
@@ -172,7 +165,8 @@ test('missing, empty, offline, and GPS scenarios show honest states', async ({ p
   await expect(page.locator('.history-chart-card')).toContainText('No readings for this period')
   await setScenario(page, 'Device offline')
   await page.getByRole('link', { name: 'Back to dashboard' }).click()
-  await expect(page.locator('.device-card')).toContainText('Wearable offline')
+  await expect(page.locator('.device-card')).toContainText('Wearable online')
+  await expect(page.locator('.device-card')).toContainText('Real pairing status')
   await expect(page.locator('.measurement-note')).toContainText('readings are stale')
   await page
     .getByRole('navigation', { name: 'Main navigation' })
@@ -213,7 +207,7 @@ test('production PWA caches the shell and clearly labels a browser-offline reloa
   await page.goto('/history')
   await expect(page.locator('h1')).toHaveText('Health trends')
   await expect(page.locator('.offline-banner')).toContainText(
-    'cached app with demo readings, not live monitoring',
+    'displayed readings are cached samples',
   )
   await page.goto('/location')
   await expect(page.locator('.map-fallback')).toContainText('Map unavailable offline')

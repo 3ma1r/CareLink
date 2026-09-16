@@ -4,9 +4,7 @@ import { ArrowLeft, Download, FileText, Footprints, Heart, Info } from 'lucide-r
 import { useCare } from '../state'
 import {
   DAY,
-  FIRST_DAY,
-  SAMPLE_NOW,
-  TODAY,
+  dateKey,
   dateLabel,
   dayStart,
   filterReadings,
@@ -29,17 +27,19 @@ import {
 import { HealthChart, MovementChart } from '../components/Charts'
 type Period = 'today' | 'week' | 'month' | 'custom'
 export default function History() {
-  const { patient, readings, alerts } = useCare()
+  const { patient, readings, alerts, sampleMode, dataNow } = useCare()
+  const today = dateKey(dataNow)
+  const firstDay = dateKey(dataNow - 29 * DAY)
   const [params, setParams] = useSearchParams()
   const queryMetric = params.get('metric')
   const metric: Metric =
     queryMetric === 'spo2' || queryMetric === 'temperature' ? queryMetric : 'heartRate'
   const queryDay = params.get('date')
   const initialDay =
-    queryDay && /^\d{4}-\d{2}-\d{2}$/.test(queryDay) && queryDay >= FIRST_DAY && queryDay <= TODAY
+    queryDay && /^\d{4}-\d{2}-\d{2}$/.test(queryDay) && queryDay >= firstDay && queryDay <= today
       ? queryDay
-      : TODAY
-  const [period, setPeriod] = useState<Period>(initialDay === TODAY ? 'today' : 'custom')
+      : today
+  const [period, setPeriod] = useState<Period>(initialDay === today ? 'today' : 'custom')
   const [startDate, setStartDate] = useState(initialDay)
   const [endDate, setEndDate] = useState(initialDay)
   const [range, setRange] = useState('24H')
@@ -49,8 +49,8 @@ export default function History() {
   const start =
     period === 'custom'
       ? dayStart(startDate)
-      : dayStart(TODAY) - (period === 'week' ? 6 : period === 'month' ? 29 : 0) * DAY
-  const end = period === 'custom' ? Math.min(dayStart(endDate) + DAY - 1, SAMPLE_NOW) : SAMPLE_NOW
+      : dayStart(today) - (period === 'week' ? 6 : period === 'month' ? 29 : 0) * DAY
+  const end = period === 'custom' ? Math.min(dayStart(endDate) + DAY - 1, dataNow) : dataNow
   const selected = useMemo(
     () => (invalidDates ? [] : filterReadings(readings, start, end)),
     [readings, start, end, invalidDates],
@@ -125,8 +125,8 @@ export default function History() {
               <input
                 type="date"
                 aria-label="History start date"
-                min={FIRST_DAY}
-                max={TODAY}
+                min={firstDay}
+                max={today}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
@@ -136,8 +136,8 @@ export default function History() {
               <input
                 type="date"
                 aria-label="History end date"
-                min={FIRST_DAY}
-                max={TODAY}
+                min={firstDay}
+                max={today}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
@@ -156,7 +156,7 @@ export default function History() {
             <SectionTitle
               title={metrics[metric].label}
               icon={<Heart size={21} />}
-              action={<Badge tone="muted">Sample readings</Badge>}
+              action={<Badge tone="muted">{sampleMode ? 'Sample readings' : 'Wearable readings'}</Badge>}
             />
             <div className="trend-summary">
               <div>
@@ -202,8 +202,8 @@ export default function History() {
             <SectionTitle title="Movement activity" icon={<Footprints size={22} />} />
             <p className="section-subtitle">
               {multiDay
-                ? 'Daily average sample intensity · 0–100'
-                : 'Sample movement intensity · 0–100'}
+                ? `Daily average ${sampleMode ? 'sample' : 'wearable'} intensity · 0–100`
+                : `${sampleMode ? 'Sample' : 'Wearable'} movement intensity · 0–100`}
             </p>
             <MovementChart readings={selected} multiDay={multiDay} />
           </section>
@@ -228,7 +228,7 @@ export default function History() {
                 </Link>
               ))
             ) : (
-              <p className="section-subtitle">No sample events in the selected period.</p>
+              <p className="section-subtitle">No events in the selected period.</p>
             )}
           </section>
         </div>
@@ -289,10 +289,10 @@ export default function History() {
           <span className="icon-tile">
             <FileText size={30} />
           </span>
-          <Badge>Demo — sample report</Badge>
+          <Badge>{sampleMode ? 'Demo — sample report' : 'Wearable report preview'}</Badge>
           <h3>{patient.name}’s health summary</h3>
           <p>
-            {patient.age} years · {patient.city}, Oman
+            {patient.age} years · Sample location: {patient.city}, Oman
           </p>
           <strong>{periodLabel}</strong>
         </div>
@@ -316,7 +316,7 @@ export default function History() {
             downloaded.
           </p>
           <p className="data-note">
-            Sample data only. Invalid readings are excluded. This monitoring prototype does not
+            {sampleMode ? 'Sample data only. ' : ''}Invalid readings are excluded. This monitoring prototype does not
             provide a medical assessment.
           </p>
           <button className="button primary full" onClick={() => setReport(false)}>

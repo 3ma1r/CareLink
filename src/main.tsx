@@ -13,13 +13,15 @@ import 'leaflet/dist/leaflet.css'
 import './styles.css'
 import { CareProvider } from './state'
 import App from './App'
+import { AuthProvider } from './auth/AuthProvider'
+import { DeviceProvider } from './device/DeviceProvider'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <CareProvider>
-        <App />
-      </CareProvider>
+      <AuthProvider>
+        <DeviceProvider><CareProvider><App /></CareProvider></DeviceProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )

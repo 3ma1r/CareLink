@@ -3,8 +3,10 @@ import { useCare } from '../state'
 import { stamp, validCoordinates } from '../data/demo'
 import { Avatar, Badge, DeviceCard, PageHeading, SectionTitle } from '../components/UI'
 import { LocationMap } from '../components/LocationMap'
+import { useDevice } from '../device/DeviceProvider'
 export default function Location() {
-  const { patient, location, scenario } = useCare()
+  const { patient, location, scenario, sampleMode } = useCare()
+  const { connection, device } = useDevice()
   const valid = validCoordinates(location.coordinates)
   return (
     <>
@@ -14,7 +16,7 @@ export default function Location() {
         action={
           <Badge tone={!valid || location.stale ? 'amber' : 'teal'}>
             <MapPin size={14} />
-            {!valid ? 'GPS unavailable' : location.stale ? 'Stale GPS fix' : 'Sample GPS fix'}
+            {!valid ? device ? 'Waiting for GPS fix' : 'GPS unavailable' : location.stale ? 'Stale GPS fix' : sampleMode ? 'Sample GPS fix' : 'Current GPS fix'}
           </Badge>
         }
       />
@@ -27,7 +29,7 @@ export default function Location() {
               <h2>{patient.name}’s location</h2>
               <p>
                 <MapPin size={15} />
-                {valid ? `${patient.city}, Oman` : 'Waiting for a valid location'}
+                {valid ? `${sampleMode ? 'Sample' : 'Last known'} location · ${patient.city}, Oman` : 'Waiting for a valid location'}
               </p>
               <small>Last GPS fix · {stamp(location.time)}</small>
             </div>
@@ -59,7 +61,7 @@ export default function Location() {
                     ? `${location.coordinates![0].toFixed(4)}° N, ${location.coordinates![1].toFixed(4)}° E`
                     : 'Unavailable'}
                 </strong>
-                <small>Fictional sample location</small>
+                <small>{sampleMode ? 'Fictional sample location' : 'Reported by the paired wearable'}</small>
               </div>
             </div>
             <div className="detail-item">
@@ -71,8 +73,8 @@ export default function Location() {
                   {!valid
                     ? 'No valid GPS coordinates'
                     : location.stale
-                      ? '3 hours before the sample clock · Stale'
-                      : '2 minutes before the sample clock'}
+                      ? sampleMode ? '3 hours before the sample clock · Stale' : 'Older than 15 minutes · Stale'
+                      : sampleMode ? '2 minutes before the sample clock' : 'Recent wearable fix'}
                 </small>
               </div>
             </div>
@@ -80,7 +82,7 @@ export default function Location() {
               {scenario === 'offline' ? <WifiOff size={19} /> : <ShieldCheck size={19} />}
               <div>
                 <span>Wearable status</span>
-                <strong>{scenario === 'offline' ? 'Offline' : 'Connected'} · Demo</strong>
+                <strong>{sampleMode ? `${scenario === 'offline' ? 'Offline' : 'Connected'} · Demo` : connection === 'online' ? 'Connected' : connection === 'offline' ? 'Offline' : 'Awaiting wearable'}</strong>
                 <small>Connection does not confirm GPS freshness</small>
               </div>
             </div>
@@ -95,7 +97,9 @@ export default function Location() {
                 ? 'This fix is stale. The patient may have moved since it was recorded.'
                 : !valid
                   ? 'The wearable has no valid GPS fix. No position has been assumed.'
-                  : 'This is a sample location from the displayed GPS-fix time. It does not track a real person.'}
+                  : sampleMode
+                    ? 'This is a sample location from the displayed GPS-fix time. It does not track a real person.'
+                    : 'This position was reported by the paired wearable at the displayed GPS-fix time.'}
             </p>
             <p>Always check when a location was recorded.</p>
           </section>
