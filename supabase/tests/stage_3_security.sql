@@ -20,19 +20,25 @@ do $$ declare s record;r jsonb;t timestamptz;begin
  if (r->>'ok')::boolean then raise exception 'consumed code reused';end if;
  r:=public.ingest_carelink_measurements(s.device_identifier,s.device_credential,'test-1',jsonb_build_array(jsonb_build_object('message_id','message-stage3-0001','measured_at',now()-interval '1 minute','heart_rate',null,'spo2',97,'quality','unstable')));
  if (r->>'inserted')::int<>1 then raise exception 'first ingest failed';end if;
+ r:=public.ingest_carelink_measurements(s.device_identifier,s.device_credential,'test-1',jsonb_build_array(jsonb_build_object('message_id','message-stage3-0002','measured_at',now()-interval '1 minute','heart_rate',72.5,'spo2',97,'quality','good')));
+ if (r->>'inserted')::int<>1 then raise exception 'fractional heart-rate ingest failed';end if;
+ if (select heart_rate from public.device_measurements m join public.devices d on d.id=m.device_id where d.device_identifier=s.device_identifier and m.message_id='message-stage3-0002')<>73 then raise exception 'fractional heart-rate rounding failed';end if;
+ r:=public.ingest_carelink_measurements(s.device_identifier,s.device_credential,'test-1',jsonb_build_array(jsonb_build_object('message_id','message-stage3-0003','measured_at',now()-interval '1 minute','heart_rate',89.6,'spo2',97,'sensor_temperature',null,'quality','unstable','heart_rate_quality','unstable','spo2_quality','good','temperature_quality','missing')));
+ if (r->>'inserted')::int<>1 then raise exception 'independent quality ingest failed';end if;
+ if not exists(select 1 from public.device_measurements m join public.devices d on d.id=m.device_id where d.device_identifier=s.device_identifier and m.message_id='message-stage3-0003' and m.heart_rate=90 and m.spo2=97 and m.sensor_temperature is null and m.heart_rate_quality='unstable' and m.spo2_quality='good' and m.temperature_quality='missing') then raise exception 'independent quality was not stored';end if;
  select last_contact_at into t from public.devices where device_identifier=s.device_identifier;
  r:=public.ingest_carelink_measurements(s.device_identifier,s.device_credential,'test-1',jsonb_build_array(jsonb_build_object('message_id','message-stage3-0001','measured_at',now()-interval '1 minute','heart_rate',null,'spo2',97,'quality','unstable')));
- if (r->>'duplicates')::int<>1 or (select count(*) from public.device_measurements m join public.devices d on d.id=m.device_id where d.device_identifier=s.device_identifier)<>1 then raise exception 'deduplication failed';end if;
+ if (r->>'duplicates')::int<>1 or (select count(*) from public.device_measurements m join public.devices d on d.id=m.device_id where d.device_identifier=s.device_identifier)<>3 then raise exception 'deduplication failed';end if;
  r:=public.ingest_carelink_measurements(s.device_identifier,'incorrect-credential','test-1','[]');
  if (r->>'ok')::boolean then raise exception 'incorrect credential accepted';end if;
- if (select heart_rate is not null from public.device_measurements m join public.devices d on d.id=m.device_id where d.device_identifier=s.device_identifier) then raise exception 'null became non-null';end if;
+ if (select heart_rate is not null from public.device_measurements m join public.devices d on d.id=m.device_id where d.device_identifier=s.device_identifier and m.message_id='message-stage3-0001') then raise exception 'null became non-null';end if;
 end $$;
 
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','33333333-3333-4333-8333-333333333333',true);
 do $$ begin
- if (select count(*) from public.devices)<>1 or (select count(*) from public.device_measurements)<>1 then raise exception 'owner reads failed';end if;
+ if (select count(*) from public.devices)<>1 or (select count(*) from public.device_measurements)<>3 then raise exception 'owner reads failed';end if;
  begin insert into public.device_measurements(device_id,message_id,measured_at) values(gen_random_uuid(),'blocked-message',now());raise exception 'browser insert succeeded';exception when insufficient_privilege then null;end;
  begin perform * from private.device_credentials;raise exception 'credential hashes readable';exception when insufficient_privilege then null;end;
  begin perform * from private.pairing_codes;raise exception 'pairing hashes readable';exception when insufficient_privilege then null;end;
@@ -44,5 +50,5 @@ set local role anon;
 do $$ begin begin perform * from public.devices;raise exception 'anon read succeeded';exception when insufficient_privilege then null;end;end $$;
 reset role;
 
-do $$ declare s record;d uuid;begin select * into s from stage3_secrets;select id into d from public.devices where device_identifier=s.device_identifier;if not public.unpair_carelink_device('33333333-3333-4333-8333-333333333333',d) then raise exception 'unpair failed';end if;if exists(select 1 from private.device_credentials where device_id=d and revoked_at is null) then raise exception 'credential not revoked';end if;if (select count(*) from public.device_measurements where device_id=d)<>1 then raise exception 'history deleted';end if;end $$;
+do $$ declare s record;d uuid;begin select * into s from stage3_secrets;select id into d from public.devices where device_identifier=s.device_identifier;if not public.unpair_carelink_device('33333333-3333-4333-8333-333333333333',d) then raise exception 'unpair failed';end if;if exists(select 1 from private.device_credentials where device_id=d and revoked_at is null) then raise exception 'credential not revoked';end if;if (select count(*) from public.device_measurements where device_id=d)<>3 then raise exception 'history deleted';end if;end $$;
 rollback;

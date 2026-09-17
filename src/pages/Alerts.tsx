@@ -13,7 +13,14 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { useCare } from '../state'
-import { formatValue, metrics, stamp, validCoordinates, validValue } from '../data/demo'
+import {
+  formatValue,
+  metrics,
+  qualityText,
+  stamp,
+  validCoordinates,
+  validValue,
+} from '../data/demo'
 import type { AlertStatus, Metric } from '../data/demo'
 import { Badge, EmptyState, Modal, PageHeading, Segments } from '../components/UI'
 const eventIcons = { fall: TriangleAlert, sos: Radio, reading: Signal }
@@ -163,7 +170,7 @@ export default function Alerts() {
                         {formatValue(validValue(reading, metric), metric)}{' '}
                         <small>{metrics[metric].unit}</small>
                       </strong>
-                      <span>{reading.quality[metric]} quality</span>
+                      <span>{qualityText(reading, metric)}</span>
                     </div>
                   ))}
                 </div>

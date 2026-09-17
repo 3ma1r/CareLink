@@ -204,6 +204,8 @@ bool hrStable = false;
 
 bool spo2Stable = false;
 
+bool tempStable = false;
+
 
 // ============================================================
 // GPS
@@ -255,6 +257,16 @@ String overallStatus =
 #define VITALS_SAMPLE_MS 20000UL
 #define VITALS_RESULT_MS 8000UL
 #define HOME_STAGE_MS 8000UL
+
+// Prototype-sensor quality thresholds. Values remain available when quality is unstable.
+constexpr int MIN_RESULT_SAMPLES = 3;
+constexpr int MIN_HR_GOOD_SAMPLES = 8;
+constexpr int MIN_SPO2_GOOD_SAMPLES = 8;
+constexpr int MIN_TEMP_GOOD_SAMPLES = 5;
+constexpr unsigned long MIN_HR_GOOD_BEATS = 3;
+constexpr float MAX_HR_MAD_BPM = 12.0;
+constexpr float MAX_SPO2_MAD_PERCENT = 3.0;
+constexpr float MAX_TEMP_MAD_C = 0.5;
 
 
 // ============================================================
@@ -387,9 +399,10 @@ float medianValue(
   int count
 );
 
-float valueRange(
+float medianAbsoluteDeviation(
   float values[],
-  int count
+  int count,
+  float median
 );
 
 
@@ -1964,12 +1977,13 @@ float medianValue(
 
 
 // ============================================================
-// SAMPLE RANGE
+// MEDIAN ABSOLUTE DEVIATION
 // ============================================================
 
-float valueRange(
+float medianAbsoluteDeviation(
   float values[],
-  int count
+  int count,
+  float median
 ) {
 
   if (
@@ -1980,43 +1994,32 @@ float valueRange(
   }
 
 
-  float minimum =
-    values[0];
+  if (
+    count > 24
+  ) {
+
+    count = 24;
+  }
 
 
-  float maximum =
-    values[0];
+  float deviations[24];
 
 
   for (
-    int i = 1;
+    int i = 0;
     i < count;
     i++
   ) {
 
-    if (
-      values[i] <
-      minimum
-    ) {
-
-      minimum =
-        values[i];
-    }
-
-
-    if (
-      values[i] >
-      maximum
-    ) {
-
-      maximum =
-        values[i];
-    }
+    deviations[i] =
+      fabs(values[i] - median);
   }
 
 
-  return maximum -
-         minimum;
+  return medianValue(
+    deviations,
+    count
+  );
 }
 
 
@@ -2202,6 +2205,12 @@ void runVitalsStage() {
       millis();
 
 
+    bool warmupComplete =
+      now -
+      vitalsStart >=
+      VITALS_WARMUP_MS;
+
+
     if (
       poxReady
     ) {
@@ -2314,6 +2323,10 @@ void runVitalsStage() {
         !isnan(
           currentTemperature
         )
+
+        &&
+
+        warmupComplete
       ) {
 
         Serial.print(
@@ -2399,12 +2412,6 @@ void runVitalsStage() {
         currentSpO2 =
           pox.getSpO2();
       }
-
-
-      bool warmupComplete =
-        now -
-        vitalsStart >=
-        VITALS_WARMUP_MS;
 
 
       Serial.print(
@@ -2523,7 +2530,7 @@ void runVitalsStage() {
 
 
   if (
-    hrCount >= 3
+    hrCount >= MIN_RESULT_SAMPLES
   ) {
 
     heartRate =
@@ -2533,20 +2540,25 @@ void runVitalsStage() {
       );
 
 
-    float hrRange =
-      valueRange(
+    float hrMad =
+      medianAbsoluteDeviation(
         hrSamples,
-        hrCount
+        hrCount,
+        heartRate
       );
 
 
     hrStable =
       (
-        hrCount >= 4
+        hrCount >= MIN_HR_GOOD_SAMPLES
 
         &&
 
-        hrRange <= 35.0
+        beatCount >= MIN_HR_GOOD_BEATS
+
+        &&
+
+        hrMad <= MAX_HR_MAD_BPM
       );
 
 
@@ -2572,12 +2584,12 @@ void runVitalsStage() {
 
 
     Serial.print(
-      " | spread="
+      " | MAD="
     );
 
 
     Serial.println(
-      hrRange,
+      hrMad,
       1
     );
   }
@@ -2604,7 +2616,7 @@ void runVitalsStage() {
 
 
   if (
-    spo2Count >= 3
+    spo2Count >= MIN_RESULT_SAMPLES
   ) {
 
     spo2 =
@@ -2614,20 +2626,21 @@ void runVitalsStage() {
       );
 
 
-    float spo2Range =
-      valueRange(
+    float spo2Mad =
+      medianAbsoluteDeviation(
         spo2Samples,
-        spo2Count
+        spo2Count,
+        spo2
       );
 
 
     spo2Stable =
       (
-        spo2Count >= 4
+        spo2Count >= MIN_SPO2_GOOD_SAMPLES
 
         &&
 
-        spo2Range <= 6.0
+        spo2Mad <= MAX_SPO2_MAD_PERCENT
       );
 
 
@@ -2653,12 +2666,12 @@ void runVitalsStage() {
 
 
     Serial.print(
-      " | spread="
+      " | MAD="
     );
 
 
     Serial.println(
-      spo2Range,
+      spo2Mad,
       1
     );
   }
@@ -2685,13 +2698,31 @@ void runVitalsStage() {
 
 
   if (
-    tempCount >= 1
+    tempCount >= MIN_RESULT_SAMPLES
   ) {
 
     bodyTemperature =
       medianValue(
         tempSamples,
         tempCount
+      );
+
+
+    float tempMad =
+      medianAbsoluteDeviation(
+        tempSamples,
+        tempCount,
+        bodyTemperature
+      );
+
+
+    tempStable =
+      (
+        tempCount >= MIN_TEMP_GOOD_SAMPLES
+
+        &&
+
+        tempMad <= MAX_TEMP_MAD_C
       );
 
 
@@ -2714,12 +2745,27 @@ void runVitalsStage() {
     Serial.println(
       tempCount
     );
+
+
+    Serial.print(
+      "[RESULT] Temperature MAD: "
+    );
+
+
+    Serial.println(
+      tempMad,
+      2
+    );
   }
 
   else {
 
     bodyTemperature =
       0.0;
+
+
+    tempStable =
+      false;
 
 
     Serial.println(
@@ -2732,11 +2778,14 @@ void runVitalsStage() {
 
   careLinkUploader.enqueue(
     heartRate,
-    heartRate > 0 && hrStable,
+    heartRate > 0,
+    hrStable,
     spo2,
-    spo2 > 0 && spo2Stable,
+    spo2 > 0,
+    spo2Stable,
     bodyTemperature,
     bodyTemperature > 0,
+    tempStable,
     totalAcceleration,
     mpuReady,
     gps.location.isValid() && gps.location.age() < 10000,
@@ -2878,14 +2927,6 @@ void evaluateHealthStatus() {
   }
 
   else if (
-    !hrStable
-  ) {
-
-    hrStatus =
-      "UNSTABLE";
-  }
-
-  else if (
     heartRate < 50
   ) {
 
@@ -2930,14 +2971,6 @@ void evaluateHealthStatus() {
 
     spo2Status =
       "NO READING";
-  }
-
-  else if (
-    !spo2Stable
-  ) {
-
-    spo2Status =
-      "UNSTABLE";
   }
 
   else if (
@@ -3015,47 +3048,51 @@ void evaluateHealthStatus() {
 
 
   bool unstable =
-    hrStatus == "UNSTABLE"
+    (heartRate > 0 && !hrStable)
 
     ||
 
-    spo2Status == "UNSTABLE";
+    (spo2 > 0 && !spo2Stable)
+
+    ||
+
+    (bodyTemperature > 0 && !tempStable);
 
 
   bool warning =
-    hrStatus == "SLIGHTLY LOW"
+    (hrStable && hrStatus == "SLIGHTLY LOW")
 
     ||
 
-    hrStatus == "ELEVATED"
+    (hrStable && hrStatus == "ELEVATED")
 
     ||
 
-    spo2Status == "CAUTION"
+    (spo2Stable && spo2Status == "CAUTION")
 
     ||
 
-    tempStatus == "LOW"
+    (tempStable && tempStatus == "LOW")
 
     ||
 
-    tempStatus == "ELEVATED";
+    (tempStable && tempStatus == "ELEVATED");
 
 
   bool alert =
-    hrStatus == "LOW"
+    (hrStable && hrStatus == "LOW")
 
     ||
 
-    hrStatus == "HIGH"
+    (hrStable && hrStatus == "HIGH")
 
     ||
 
-    spo2Status == "CRITICAL LOW"
+    (spo2Stable && spo2Status == "CRITICAL LOW")
 
     ||
 
-    tempStatus == "HIGH";
+    (tempStable && tempStatus == "HIGH");
 
 
   if (

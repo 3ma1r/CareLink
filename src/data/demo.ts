@@ -98,9 +98,31 @@ export function formatValue(value: number | null, metric: Metric) {
 }
 export function validValue(reading: Reading, metric: Metric): number | null {
   const value = reading[metric]
-  return reading.quality[metric] === 'Good' && value !== null && Number.isFinite(value)
-    ? value
-    : null
+  if (value === null || !Number.isFinite(value)) return null
+  const [minimum, maximum] =
+    metric === 'heartRate' ? [20, 250] : metric === 'spo2' ? [50, 100] : [-20, 85]
+  return value >= minimum && value <= maximum ? value : null
+}
+export function qualityText(reading: Reading, metric: Metric) {
+  if (validValue(reading, metric) === null || reading.quality[metric] === 'Missing')
+    return 'No reading'
+  return `${reading.quality[metric]} quality`
+}
+export function healthStatus(reading: Reading, metric: Metric) {
+  const value = validValue(reading, metric)
+  if (value === null) return 'No reading'
+  if (metric === 'heartRate')
+    return value < 50
+      ? 'Low'
+      : value < 60
+        ? 'Slightly low'
+        : value <= 100
+          ? 'Normal'
+          : value <= 120
+            ? 'Elevated'
+            : 'High'
+  if (metric === 'spo2') return value < 90 ? 'Critical low' : value <= 94 ? 'Caution' : 'Normal'
+  return value < 35 ? 'Low' : value <= 37.5 ? 'Normal' : value <= 38 ? 'Elevated' : 'High'
 }
 export function summarize(readings: Reading[], metric: Metric) {
   const values = readings.flatMap((r) => {
@@ -154,6 +176,12 @@ function createReadings(scenario: Scenario): Reading[] {
     latest.temperature = 34.8
     latest.movement = 12
     latest.quality = { heartRate: 'Good', spo2: 'Good', temperature: 'Good' }
+  }
+  if (latest && scenario === 'unstable') {
+    latest.heartRate = 90
+    latest.spo2 = 97
+    latest.temperature = 34.8
+    latest.quality = { heartRate: 'Unstable', spo2: 'Good', temperature: 'Unstable' }
   }
   return rows
 }

@@ -24,6 +24,7 @@ import {
   filterReadings,
   formatValue,
   metrics,
+  qualityText,
   stamp,
   validValue,
 } from '../data/demo'
@@ -135,13 +136,7 @@ export default function Dashboard() {
                 <span>{metrics[metric].unit}</span>
               </div>
               <div className="vital-caption">
-                {value === null
-                  ? latest
-                    ? `${latest.quality[metric]} signal`
-                    : 'No readings'
-                  : metric === 'temperature'
-                    ? 'Wearable sensor reading'
-                    : 'Latest valid reading'}
+                {latest ? qualityText(latest, metric) : 'No reading'}
               </div>
               <HealthChart readings={selected.slice(-16)} metric={metric} small />
             </Link>
@@ -168,8 +163,11 @@ export default function Dashboard() {
         <Clock3 size={13} />
         Last measured · {latest ? stamp(latest.time) : 'No measurements'}{' '}
         <span>
-          · {day === today ? 'Today' : dateLabel(dayStart(day))} · {sampleMode ? 'Sample data' : 'Wearable data'}
-          {scenario === 'offline' || (!sampleMode && connection === 'offline') ? ' · Device offline, readings are stale' : ''}
+          · {day === today ? 'Today' : dateLabel(dayStart(day))} ·{' '}
+          {sampleMode ? 'Sample data' : 'Wearable data'}
+          {scenario === 'offline' || (!sampleMode && connection === 'offline')
+            ? ' · Device offline, readings are stale'
+            : ''}
         </span>
       </div>
       <div className="dashboard-grid">
@@ -188,7 +186,8 @@ export default function Dashboard() {
                 </strong>
                 <span>
                   <i className="legend-dot" />
-                  Heart rate · {sampleMode ? 'sample readings' : 'wearable readings'}
+                  Heart rate · {latest ? qualityText(latest, 'heartRate') : 'No reading'} ·{' '}
+                  {sampleMode ? 'sample readings' : 'wearable readings'}
                 </span>
               </div>
               <Segments
@@ -200,8 +199,8 @@ export default function Dashboard() {
             </div>
             <HealthChart readings={chartRows} alerts={alerts} />
             <div className="chart-footnote">
-              {chartRows.filter((r) => validValue(r, 'heartRate') !== null).length} valid readings{' '}
-              <span>Gaps indicate missing or unstable signals</span>
+              {chartRows.filter((r) => validValue(r, 'heartRate') !== null).length} calculated
+              readings <span>Unstable values are included; gaps indicate missing readings</span>
             </div>
           </section>
         </div>

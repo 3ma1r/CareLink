@@ -6,7 +6,7 @@ export type Database = {
         Insert: never; Update: never; Relationships: []
       }
       device_measurements: {
-        Row: { id:number; device_id:string; message_id:string; measured_at:string; received_at:string; heart_rate:number|null; spo2:number|null; sensor_temperature:number|null; movement:number|null; latitude:number|null; longitude:number|null; gps_fix_at:string|null; quality:string; battery_percent:number|null; created_at:string }
+        Row: { id:number; device_id:string; message_id:string; measured_at:string; received_at:string; heart_rate:number|null; spo2:number|null; sensor_temperature:number|null; movement:number|null; latitude:number|null; longitude:number|null; gps_fix_at:string|null; quality:string; heart_rate_quality:string|null; spo2_quality:string|null; temperature_quality:string|null; battery_percent:number|null; created_at:string }
         Insert: never; Update: never; Relationships: []
       }
       profiles: {

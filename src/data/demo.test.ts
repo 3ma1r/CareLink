@@ -8,6 +8,8 @@ import {
   dayStart,
   demoSource,
   filterReadings,
+  healthStatus,
+  qualityText,
   scenarios,
   summarize,
   validCoordinates,
@@ -58,10 +60,38 @@ describe('sample timeline and data integrity', () => {
   it('preserves unstable gaps across all vital metrics', () => {
     const { readings } = demoSource.getSnapshot('unstable')
     for (const metric of ['heartRate', 'spo2', 'temperature'] as Metric[]) {
-      expect(validValue(readings.at(-1)!, metric)).toBeNull()
+      const latest = readings.at(-1)!
+      if (latest[metric] === null) expect(validValue(latest, metric)).toBeNull()
+      else expect(validValue(latest, metric)).toBe(latest[metric])
       expect(readings.some((r) => r.quality[metric] === 'Missing')).toBe(true)
       expect(readings.some((r) => r.quality[metric] === 'Unstable')).toBe(true)
     }
+  })
+  it('keeps value, quality, and health status independent', () => {
+    const base = demoSource.getSnapshot('typical').readings.at(-1)!
+    const stableHigh = {
+      ...base,
+      heartRate: 125,
+      quality: { ...base.quality, heartRate: 'Good' as const },
+    }
+    const unstableNormal = {
+      ...base,
+      heartRate: 89.6,
+      quality: { ...base.quality, heartRate: 'Unstable' as const },
+    }
+    const missing = {
+      ...base,
+      heartRate: null,
+      quality: { ...base.quality, heartRate: 'Missing' as const },
+    }
+    expect(validValue(stableHigh, 'heartRate')).toBe(125)
+    expect(qualityText(stableHigh, 'heartRate')).toBe('Good quality')
+    expect(healthStatus(stableHigh, 'heartRate')).toBe('High')
+    expect(validValue(unstableNormal, 'heartRate')).toBe(89.6)
+    expect(qualityText(unstableNormal, 'heartRate')).toBe('Unstable quality')
+    expect(healthStatus(unstableNormal, 'heartRate')).toBe('Normal')
+    expect(validValue(missing, 'heartRate')).toBeNull()
+    expect(qualityText(missing, 'heartRate')).toBe('No reading')
   })
   it('handles empty history without false zero summary readings', () => {
     const { readings } = demoSource.getSnapshot('empty')

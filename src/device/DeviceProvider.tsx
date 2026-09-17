@@ -42,6 +42,7 @@ function testMeasurement(deviceId: string): Measurement {
     received_at: new Date(Date.now() - 25_000).toISOString(),
     heart_rate: 72, spo2: 97, sensor_temperature: 34.2, movement: 18,
     latitude: null, longitude: null, gps_fix_at: null, quality: 'good',
+    heart_rate_quality: 'good', spo2_quality: 'good', temperature_quality: 'good',
     battery_percent: null, created_at: now(),
   }
 }

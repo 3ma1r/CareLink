@@ -10,6 +10,7 @@ import {
   filterReadings,
   formatValue,
   metrics,
+  qualityText,
   stamp,
   summarize,
   validValue,
@@ -156,7 +157,9 @@ export default function History() {
             <SectionTitle
               title={metrics[metric].label}
               icon={<Heart size={21} />}
-              action={<Badge tone="muted">{sampleMode ? 'Sample readings' : 'Wearable readings'}</Badge>}
+              action={
+                <Badge tone="muted">{sampleMode ? 'Sample readings' : 'Wearable readings'}</Badge>
+              }
             />
             <div className="trend-summary">
               <div>
@@ -164,7 +167,10 @@ export default function History() {
                   {latest ? formatValue(validValue(latest, metric), metric) : '—'}
                   <small> {metrics[metric].unit}</small>
                 </strong>
-                <span>Last measured · {latest ? stamp(latest.time) : 'No readings'}</span>
+                <span>
+                  Last measured · {latest ? stamp(latest.time) : 'No readings'} ·{' '}
+                  {latest ? qualityText(latest, metric) : 'No reading'}
+                </span>
               </div>
               {!multiDay && (
                 <Segments
@@ -188,8 +194,8 @@ export default function History() {
             <Stats readings={selected} metric={metric} />
             <p className="data-note">
               <Info size={14} />
-              Period statistics include {stats.count} valid readings. Missing and unstable values
-              are excluded.
+              Period statistics include {stats.count} calculated readings. Unstable numerical values
+              are included; missing readings are excluded.
             </p>
             {metric === 'temperature' && (
               <p className="inline-notice">
@@ -250,7 +256,7 @@ export default function History() {
                       <div>
                         <strong>{stamp(r.time)}</strong>
                         <small className={r.quality[metric] === 'Good' ? '' : 'text-warning'}>
-                          {r.quality[metric]} quality
+                          {qualityText(r, metric)}
                         </small>
                       </div>
                       <span className="reading-value">
@@ -301,7 +307,7 @@ export default function History() {
           <Stats readings={selected} metric={metric} />
           <div className="report-facts">
             <span>
-              Valid readings<strong>{stats.count}</strong>
+              Calculated readings<strong>{stats.count}</strong>
             </span>
             <span>
               Sample events<strong>{selectedAlerts.length}</strong>
@@ -316,8 +322,8 @@ export default function History() {
             downloaded.
           </p>
           <p className="data-note">
-            {sampleMode ? 'Sample data only. ' : ''}Invalid readings are excluded. This monitoring prototype does not
-            provide a medical assessment.
+            {sampleMode ? 'Sample data only. ' : ''}Missing readings are excluded. This monitoring
+            prototype does not provide a medical assessment.
           </p>
           <button className="button primary full" onClick={() => setReport(false)}>
             Done

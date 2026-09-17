@@ -2,8 +2,14 @@ import type { Reading, Quality } from '../data/demo'
 import type { Measurement } from './DeviceProvider'
 
 export function mapMeasurement(row: Measurement): Reading {
-  const quality: Quality =
+  const legacyQuality: Quality =
     row.quality === 'good' ? 'Good' : row.quality === 'unstable' ? 'Unstable' : 'Missing'
+  const metricQuality = (stored: string | null, value: number | null): Quality => {
+    if (value === null || !Number.isFinite(value)) return 'Missing'
+    if (stored === 'good') return 'Good'
+    if (stored === 'unstable') return 'Unstable'
+    return legacyQuality === 'Missing' ? 'Unstable' : legacyQuality
+  }
   return {
     id: String(row.id),
     time: Date.parse(row.measured_at),
@@ -11,7 +17,11 @@ export function mapMeasurement(row: Measurement): Reading {
     spo2: row.spo2,
     temperature: row.sensor_temperature,
     movement: row.movement,
-    quality: { heartRate: quality, spo2: quality, temperature: quality },
+    quality: {
+      heartRate: metricQuality(row.heart_rate_quality, row.heart_rate),
+      spo2: metricQuality(row.spo2_quality, row.spo2),
+      temperature: metricQuality(row.temperature_quality, row.sensor_temperature),
+    },
   }
 }
 

@@ -8,15 +8,25 @@ function row(overrides: Partial<Measurement> = {}): Measurement {
     measured_at: '2026-09-15T08:00:00Z', received_at: '2026-09-15T08:00:02Z',
     heart_rate: 72, spo2: 97, sensor_temperature: 34.4, movement: 12,
     latitude: null, longitude: null, gps_fix_at: null, quality: 'good',
+    heart_rate_quality: null, spo2_quality: null, temperature_quality: null,
     battery_percent: null, created_at: '2026-09-15T08:00:02Z', ...overrides,
   }
 }
 
 describe('wearable measurement adapter', () => {
-  it('preserves nullable sensor values and excludes unstable values from valid chart data', () => {
+  it('preserves unstable numeric values and independent per-metric quality', () => {
+    expect(mapMeasurement(row({
+      heart_rate: 89.6, quality: 'unstable', heart_rate_quality: 'unstable',
+      spo2_quality: 'good', temperature_quality: 'missing', sensor_temperature: null,
+    }))).toMatchObject({
+      heartRate: 89.6, spo2: 97, temperature: null,
+      quality: { heartRate: 'Unstable', spo2: 'Good', temperature: 'Missing' },
+    })
+  })
+
+  it('maps legacy row quality while treating null metrics as missing', () => {
     expect(mapMeasurement(row({ heart_rate: null, quality: 'unstable' }))).toMatchObject({
-      heartRate: null, spo2: 97,
-      quality: { heartRate: 'Unstable', spo2: 'Unstable', temperature: 'Unstable' },
+      quality: { heartRate: 'Missing', spo2: 'Unstable', temperature: 'Unstable' },
     })
   })
 

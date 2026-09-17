@@ -149,13 +149,16 @@ test('missing, empty, offline, and GPS scenarios show honest states', async ({ p
   await page.route('https://tile.openstreetmap.org/**', (route) => route.abort())
   await page.goto('/')
   await setScenario(page, 'Missing / unstable vitals')
-  await expect(page.locator('.vital-card.heartRate .vital-value')).toContainText('—')
+  await expect(page.locator('.vital-card.heartRate .vital-value')).toContainText('90')
+  await expect(page.locator('.vital-card.heartRate')).toContainText('Unstable quality')
+  await expect(page.locator('.vital-card.spo2')).toContainText('Good quality')
   await page.locator('.vital-card.heartRate').click()
   await page
     .getByRole('group', { name: 'History chart range' })
     .getByRole('button', { name: '1H', exact: true })
     .click()
-  await expect(page.locator('.history-chart-card')).toContainText('No valid readings in this range')
+  await expect(page.locator('.history-chart-card')).toContainText('90 bpm')
+  await expect(page.locator('.reading-row').first()).toContainText('Unstable quality')
   await setScenario(page, 'Empty history')
   await expect(page.locator('.history-chart-card .stats-grid .stat strong')).toHaveText([
     '— bpm',

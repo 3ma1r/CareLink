@@ -71,19 +71,22 @@ export function HealthChart({
     const point = { ...row, value: validValue(row, metric) }
     const previous = readings[index - 1]
     return previous && row.time - previous.time > 5 * 60_000
-      ? [{ ...previous, id: `gap-${previous.id}-${row.id}`, time: previous.time + 1, value: null }, point]
+      ? [
+          { ...previous, id: `gap-${previous.id}-${row.id}`, time: previous.time + 1, value: null },
+          point,
+        ]
       : [point]
   })
   const hasValues = data.some((r) => r.value !== null)
   if (!hasValues)
     return small ? (
-      <div className="sparkline-empty">No valid readings</div>
+      <div className="sparkline-empty">No readings</div>
     ) : (
       <EmptyState
-        title={readings.length ? 'No valid readings in this range' : undefined}
+        title={readings.length ? 'No readings in this range' : undefined}
         detail={
           readings.length
-            ? 'Missing and unstable signals are excluded. No values have been estimated.'
+            ? 'No calculated values are available. Missing values have not been estimated.'
             : undefined
         }
       />
