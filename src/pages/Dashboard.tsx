@@ -54,7 +54,14 @@ export default function Dashboard() {
   const selected = filterReadings(readings, dayStart(day), end)
   const latest = selected.at(-1)
   const chartRows = filterReadings(selected, end - Number.parseInt(range) * 3600000, end)
-  const newEvent = alerts.find((a) => a.status !== 'Resolved' && a.id.startsWith('demo-'))
+  const activeAlerts = alerts.filter((alert) => alert.status === 'Active')
+  const importantAlert = activeAlerts.slice().sort((left, right) => {
+    const priority = { Critical: 3, High: 2, Moderate: 1, Low: 0 }
+    return (
+      priority[right.severity] - priority[left.severity] ||
+      (right.alertTime ?? right.time) - (left.alertTime ?? left.time)
+    )
+  })[0]
   return (
     <>
       <PageHeading
@@ -205,31 +212,29 @@ export default function Dashboard() {
           </section>
         </div>
         <aside className="dashboard-aside">
-          <Link to="/alerts" className={`fall-card ${newEvent ? 'attention' : ''}`}>
+          <Link to="/alerts" className={`fall-card ${importantAlert ? 'attention' : ''}`}>
             <span className="icon-tile">
-              {newEvent ? <TriangleAlert size={25} /> : <ShieldCheck size={26} />}
+              {importantAlert ? <TriangleAlert size={25} /> : <ShieldCheck size={26} />}
             </span>
             <div>
               <strong>
-                {newEvent
-                  ? newEvent.type === 'sos'
-                    ? 'New SOS alert'
-                    : 'Suspected fall · escalated'
+                {importantAlert
+                  ? `${activeAlerts.length} active ${activeAlerts.length === 1 ? 'alert' : 'alerts'}`
                   : !readings.length
-                    ? 'Fall status unavailable'
-                    : 'No current fall alert'}
+                    ? 'Alert status unavailable'
+                    : 'No active alerts'}
               </strong>
               <p>
-                {newEvent
-                  ? 'Review this sample event'
+                {importantAlert
+                  ? `${importantAlert.title} · ${stamp(importantAlert.time)}`
                   : !readings.length
                     ? 'No wearable measurements'
                     : scenario === 'offline'
-                      ? 'Last known sample · Device offline'
-                      : 'Latest wearable sample'}
+                      ? 'Last known status · Device offline'
+                      : 'Latest wearable measurements reviewed'}
               </p>
             </div>
-            {newEvent ? (
+            {importantAlert ? (
               <ChevronRight size={20} />
             ) : (
               <span className="round-check">

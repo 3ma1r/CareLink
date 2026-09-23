@@ -8,7 +8,7 @@ function row(overrides: Partial<Measurement> = {}): Measurement {
     measured_at: '2026-09-15T08:00:00Z', received_at: '2026-09-15T08:00:02Z',
     heart_rate: 72, spo2: 97, sensor_temperature: 34.4, movement: 12,
     latitude: null, longitude: null, gps_fix_at: null, quality: 'good',
-    heart_rate_quality: null, spo2_quality: null, temperature_quality: null,
+    heart_rate_quality: null, spo2_quality: null, temperature_quality: null, confirmed_fall: false,
     battery_percent: null, created_at: '2026-09-15T08:00:02Z', ...overrides,
   }
 }
@@ -38,4 +38,3 @@ describe('wearable measurement adapter', () => {
     expect(latest?.id).toBe(1)
   })
 })
-

@@ -2,7 +2,7 @@ export type Metric = 'heartRate' | 'spo2' | 'temperature'
 export type Quality = 'Good' | 'Unstable' | 'Missing'
 export type Scenario =
   'typical' | 'offline' | 'unstable' | 'staleGps' | 'noGps' | 'sos' | 'fall' | 'empty'
-export type AlertStatus = 'New' | 'Viewed' | 'Resolved'
+export type AlertStatus = 'Active' | 'Acknowledged' | 'Resolved'
 export type AIState = 'awaiting' | 'learning' | 'usual' | 'unusual' | 'insufficient' | 'unavailable'
 export interface Reading {
   id: string
@@ -24,9 +24,21 @@ export interface CareAlert {
   type: 'fall' | 'sos' | 'reading'
   title: string
   description: string
-  severity: 'High' | 'Moderate' | 'Low'
+  severity: 'Critical' | 'High' | 'Moderate' | 'Low'
   status: AlertStatus
   time: number
+  alertTime?: number
+  firstTriggeredAt?: number
+  lastSeenAt?: number
+  occurrenceCount?: number
+  observedValue?: number | null
+  unit?: string | null
+  metric?: 'heart_rate' | 'spo2' | 'temperature' | 'fall'
+  ruleId?: string
+  ruleVersion?: number
+  deviceId?: string
+  acknowledgedAt?: number | null
+  resolvedAt?: number | null
   cancelled?: boolean
   readingId: string
   gpsTime: number | null
@@ -215,7 +227,7 @@ function createAlerts(readings: Reading[], scenario: Scenario): CareAlert[] {
       description:
         'The wearable reported a low-quality signal. This sample reading is excluded from health summaries; it does not confirm a health condition.',
       severity: 'Moderate',
-      status: 'New',
+      status: 'Active',
     }),
     make('a-2', 22, {
       type: 'fall',
@@ -232,7 +244,7 @@ function createAlerts(readings: Reading[], scenario: Scenario): CareAlert[] {
       description:
         'A sample manual SOS event was recorded by the wearable. This demo sends no notifications and initiates no calls.',
       severity: 'High',
-      status: 'Viewed',
+      status: 'Acknowledged',
     }),
     make('a-4', 50, {
       type: 'fall',
@@ -271,7 +283,7 @@ function createAlerts(readings: Reading[], scenario: Scenario): CareAlert[] {
               title: 'SOS button pressed',
               description: 'A new sample manual SOS event. No notification or call has been sent.',
               severity: 'High',
-              status: 'New',
+              status: 'Active',
             }
           : {
               type: 'fall',
@@ -279,7 +291,7 @@ function createAlerts(readings: Reading[], scenario: Scenario): CareAlert[] {
               description:
                 'The countdown was not cancelled. This is an escalated suspected fall, not an independently verified fall.',
               severity: 'High',
-              status: 'New',
+              status: 'Active',
               cancelled: false,
             },
       ),

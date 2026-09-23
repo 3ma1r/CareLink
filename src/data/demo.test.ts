@@ -111,7 +111,7 @@ describe('sample timeline and data integrity', () => {
   it('distinguishes cancelled and escalated suspected falls', () => {
     const { alerts } = demoSource.getSnapshot('fall')
     expect(alerts[0].cancelled).toBe(false)
-    expect(alerts[0].status).toBe('New')
+    expect(alerts[0].status).toBe('Active')
     expect(alerts[0].description).toContain('not an independently verified fall')
     expect(alerts.some((a) => a.cancelled === true && a.status === 'Resolved')).toBe(true)
   })

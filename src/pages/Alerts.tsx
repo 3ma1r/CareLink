@@ -23,31 +23,46 @@ import {
 } from '../data/demo'
 import type { AlertStatus, Metric } from '../data/demo'
 import { Badge, EmptyState, Modal, PageHeading, Segments } from '../components/UI'
+
 const eventIcons = { fall: TriangleAlert, sos: Radio, reading: Signal }
+const severityTone = (severity: string) =>
+  severity === 'Critical' || severity === 'High'
+    ? 'red'
+    : severity === 'Moderate'
+      ? 'amber'
+      : 'teal'
+
 export default function Alerts() {
-  const { alerts, readings, updateAlert, patient } = useCare()
+  const { alerts, readings, updateAlert, patient, sampleMode, alertsLoading, alertError } =
+    useCare()
   const [filter, setFilter] = useState<'All' | AlertStatus>('All')
   const [params, setParams] = useSearchParams()
   const [announcement, setAnnouncement] = useState('')
-  const selected = alerts.find((a) => a.id === params.get('event'))
-  const filtered = alerts.filter((a) => filter === 'All' || a.status === filter)
-  const newCount = alerts.filter((a) => a.status === 'New').length
-  function action(status: AlertStatus) {
-    if (selected) {
-      updateAlert(selected.id, status)
-      setAnnouncement(`Alert ${status.toLowerCase()} in demo state.`)
-    }
+  const [busy, setBusy] = useState(false)
+  const selected = alerts.find((alert) => alert.id === params.get('event'))
+  const filtered = alerts.filter((alert) => filter === 'All' || alert.status === filter)
+  const activeCount = alerts.filter((alert) => alert.status === 'Active').length
+
+  async function action(status: AlertStatus) {
+    if (!selected) return
+    setBusy(true)
+    const error = await updateAlert(selected.id, status)
+    setBusy(false)
+    setAnnouncement(
+      error ?? `Alert ${status === 'Acknowledged' ? 'acknowledged' : 'resolved'} successfully.`,
+    )
   }
-  const reading = readings.find((r) => r.id === selected?.readingId)
+
+  const reading = readings.find((row) => row.id === selected?.readingId)
   return (
     <>
       <PageHeading
         title="Alerts"
         subtitle={<>A clear view of the moments that need your attention.</>}
         action={
-          <Badge tone={newCount ? 'amber' : 'teal'}>
+          <Badge tone={activeCount ? 'amber' : 'teal'}>
             <Bell size={14} />
-            {newCount} new {newCount === 1 ? 'alert' : 'alerts'}
+            {activeCount} active {activeCount === 1 ? 'alert' : 'alerts'}
           </Badge>
         }
       />
@@ -57,16 +72,24 @@ export default function Alerts() {
         </span>
         <div>
           <h2>Keeping you in the loop</h2>
-          <p>Review sample events from {patient.name}’s wearable. Actions only update this demo.</p>
+          <p>
+            {sampleMode
+              ? `Review sample events from ${patient.name}’s wearable. Demo actions stay in this test session.`
+              : `Review deterministic monitoring alerts from ${patient.name}’s paired wearable.`}
+          </p>
         </div>
         <Badge tone="muted">No notifications sent</Badge>
       </div>
       <div className="alerts-toolbar">
         <Segments
           label="Alert status"
-          options={(['All', 'New', 'Viewed', 'Resolved'] as const).map((value) => ({
+          options={(['All', 'Active', 'Acknowledged', 'Resolved'] as const).map((value) => ({
             value,
-            label: `${value} (${value === 'All' ? alerts.length : alerts.filter((a) => a.status === value).length})`,
+            label: `${value} (${
+              value === 'All'
+                ? alerts.length
+                : alerts.filter((alert) => alert.status === value).length
+            })`,
           }))}
           value={filter}
           onChange={setFilter}
@@ -76,45 +99,56 @@ export default function Alerts() {
       <div aria-live="polite" className="sr-only">
         {announcement}
       </div>
-      <div className="alerts-list">
-        {filtered.length ? (
-          filtered.map((a) => {
-            const Icon = eventIcons[a.type]
+      {alertError && (
+        <p className="form-error" role="alert">
+          {alertError} Existing measurements remain available.
+        </p>
+      )}
+      <div className="alerts-list" aria-busy={alertsLoading}>
+        {alertsLoading && !alerts.length ? (
+          <section className="card">
+            <EmptyState
+              title="Loading alerts"
+              detail="Checking the latest authorized alert history."
+            />
+          </section>
+        ) : filtered.length ? (
+          filtered.map((alert) => {
+            const Icon = eventIcons[alert.type]
             return (
               <Link
-                key={a.id}
-                className={`alert-card card ${a.status === 'New' ? 'unread' : ''}`}
-                to={`?event=${a.id}`}
+                key={alert.id}
+                className={`alert-card card ${alert.status === 'Active' ? 'unread' : ''}`}
+                to={`?event=${alert.id}`}
               >
-                <span className={`alert-type-icon ${a.severity.toLowerCase()}`}>
+                <span className={`alert-type-icon ${alert.severity.toLowerCase()}`}>
                   <Icon size={24} />
                 </span>
                 <div className="alert-card-content">
                   <div className="alert-title">
-                    <h2>{a.title}</h2>
-                    <Badge
-                      tone={
-                        a.severity === 'High' ? 'red' : a.severity === 'Moderate' ? 'amber' : 'teal'
-                      }
-                    >
-                      {a.severity} severity
-                    </Badge>
+                    <h2>{alert.title}</h2>
+                    <Badge tone={severityTone(alert.severity)}>{alert.severity} severity</Badge>
                   </div>
-                  <p>{a.description}</p>
+                  <p>{alert.description}</p>
+                  {alert.observedValue != null && (
+                    <p className="alert-observed">
+                      Observed · {alert.observedValue} {alert.unit}
+                    </p>
+                  )}
                   <div className="alert-meta">
                     <span>
                       <Clock3 size={13} />
-                      {stamp(a.time)}
+                      Measured {stamp(alert.time)}
                     </span>
-                    <span className={`alert-status ${a.status.toLowerCase()}`}>
-                      {a.status === 'Resolved' ? (
+                    <span className={`alert-status ${alert.status.toLowerCase()}`}>
+                      {alert.status === 'Resolved' ? (
                         <CheckCheck size={14} />
-                      ) : a.status === 'Viewed' ? (
+                      ) : alert.status === 'Acknowledged' ? (
                         <Check size={14} />
                       ) : (
                         <span className="status-dot" />
                       )}
-                      {a.status}
+                      {alert.status}
                     </span>
                   </div>
                 </div>
@@ -126,37 +160,56 @@ export default function Alerts() {
           <section className="card">
             <EmptyState
               title={`No ${filter.toLowerCase()} alerts`}
-              detail="You’re all caught up in this demo view. Choose another filter to see more events."
+              detail={
+                sampleMode
+                  ? 'Choose another filter to see sample events.'
+                  : filter === 'All'
+                    ? 'No automatic alerts have been generated for this patient.'
+                    : 'Choose another filter to review the alert history.'
+              }
             />
           </section>
         )}
       </div>
       <p className="data-note alert-note">
         <Bell size={16} />
-        This prototype does not deliver notifications, monitor in the background, or initiate calls.
+        This prototype creates in-app records only. It does not deliver notifications or initiate
+        calls.
       </p>
       <Modal open={!!selected} onClose={() => setParams({})} title="Alert details">
         {selected && (
           <div className="alert-detail">
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge tone={selected.severity === 'High' ? 'red' : 'amber'}>
-                {selected.severity} severity
-              </Badge>
+              <Badge tone={severityTone(selected.severity)}>{selected.severity} severity</Badge>
               <Badge tone="muted">{selected.status}</Badge>
-              <Badge tone="muted">Sample event</Badge>
+              {sampleMode && <Badge tone="muted">Sample event</Badge>}
             </div>
             <h3>{selected.title}</h3>
             <p>{selected.description}</p>
             <div className="detail-time">
               <Clock3 size={17} />
-              Event time · {stamp(selected.time)}
+              Measurement time · {stamp(selected.time)}
             </div>
+            {selected.alertTime && (
+              <div className="detail-time">
+                <Bell size={17} />
+                Alert created · {stamp(selected.alertTime)}
+              </div>
+            )}
+            {selected.occurrenceCount && selected.occurrenceCount > 1 && (
+              <p className="inline-notice">
+                This condition was seen {selected.occurrenceCount} times. Last seen{' '}
+                {stamp(selected.lastSeenAt ?? selected.time)}.
+              </p>
+            )}
             {selected.type === 'fall' && (
               <div className="inline-notice">
                 <TriangleAlert size={19} />
-                {selected.cancelled
-                  ? 'Cancelled on wearable · Not escalated'
-                  : 'Uncancelled countdown · Escalated suspicion · Not independently verified'}
+                {sampleMode
+                  ? selected.cancelled
+                    ? 'Cancelled on wearable · Not escalated'
+                    : 'Uncancelled countdown · Escalated suspicion · Not independently verified'
+                  : 'Confirmed fall signal · Requires deliberate caregiver acknowledgement or resolution'}
               </div>
             )}
             <h4>Related measurements</h4>
@@ -178,7 +231,7 @@ export default function Alerts() {
               </>
             ) : (
               <p className="inline-notice">
-                No related measurement is available in this demo scenario.
+                The related measurement is outside the loaded history window.
               </p>
             )}
             <h4>Location at the event</h4>
@@ -194,8 +247,8 @@ export default function Alerts() {
                 <small>
                   {selected.gpsTime
                     ? `Fix was ${Math.round((selected.time - selected.gpsTime) / 60000)} minutes old at the event`
-                    : 'No valid fix at this event'}{' '}
-                  · Sample location
+                    : 'No valid fix at this event'}
+                  {sampleMode ? ' · Sample location' : ''}
                 </small>
               </div>
             </div>
@@ -205,24 +258,25 @@ export default function Alerts() {
             <div className="modal-actions">
               <button
                 className="button secondary"
-                disabled={selected.status !== 'New'}
-                onClick={() => action('Viewed')}
+                disabled={busy || selected.status !== 'Active'}
+                onClick={() => void action('Acknowledged')}
               >
                 <Check size={18} />
-                Mark as viewed
+                {selected.status === 'Acknowledged' ? 'Acknowledged' : 'Acknowledge'}
               </button>
               <button
                 className="button primary"
-                disabled={selected.status === 'Resolved'}
-                onClick={() => action('Resolved')}
+                disabled={busy || selected.status === 'Resolved'}
+                onClick={() => void action('Resolved')}
               >
                 <CheckCheck size={18} />
                 {selected.status === 'Resolved' ? 'Resolved' : 'Resolve'}
               </button>
             </div>
             <p className="data-note">
-              These actions save locally for this session. Resolving an alert does not confirm the
-              patient’s safety.
+              {sampleMode
+                ? 'Demo actions are local to this test session.'
+                : 'Acknowledgement records the signed-in caregiver and time. Resolving an alert preserves its history.'}
             </p>
           </div>
         )}

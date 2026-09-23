@@ -127,13 +127,13 @@ test('alerts can be viewed and resolved without sending anything', async ({ page
   await page
     .locator('.alert-card')
     .filter({ hasText: 'Suspected fall · escalated' })
-    .filter({ hasText: 'New' })
+    .filter({ hasText: 'Active' })
     .click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toContainText('Not independently verified')
   await expect(dialog).toContainText('Fix was 2 minutes old at the event')
-  await dialog.getByRole('button', { name: 'Mark as viewed' }).click()
-  await expect(dialog.getByRole('button', { name: 'Mark as viewed' })).toBeDisabled()
+  await dialog.getByRole('button', { name: 'Acknowledge' }).click()
+  await expect(dialog.getByRole('button', { name: 'Acknowledged' })).toBeDisabled()
   await dialog.getByRole('button', { name: 'Resolve', exact: true }).click()
   await expect(dialog.getByRole('button', { name: 'Resolved', exact: true })).toBeDisabled()
   await page.keyboard.press('Escape')
@@ -191,7 +191,8 @@ test('missing, empty, offline, and GPS scenarios show honest states', async ({ p
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('link', { name: 'Dashboard' })
     .click()
-  await expect(page.locator('.fall-card')).toContainText('New SOS alert')
+  await expect(page.locator('.fall-card')).toContainText('active alerts')
+  await expect(page.locator('.fall-card')).toContainText('SOS button pressed')
 })
 
 test('production PWA caches the shell and clearly labels a browser-offline reload', async ({

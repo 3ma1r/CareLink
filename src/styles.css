@@ -1666,7 +1666,8 @@ select {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.alert-type-icon.high {
+.alert-type-icon.high,
+.alert-type-icon.critical {
   background: var(--red-bg);
   color: var(--red);
 }
@@ -1706,11 +1707,18 @@ select {
   align-items: center;
   gap: 6px;
 }
-.alert-status.new {
+.alert-status.active {
   color: var(--amber-ink);
+}
+.alert-status.acknowledged {
+  color: var(--accent);
 }
 .alert-status.resolved {
   color: var(--accent);
+}
+.alert-card-content > .alert-observed {
+  color: var(--ink);
+  font-weight: 700;
 }
 .alert-chevron {
   color: var(--muted);

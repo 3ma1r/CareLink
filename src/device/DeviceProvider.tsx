@@ -7,6 +7,7 @@ import type { Database } from '../lib/database.types'
 
 export type Device = Database['public']['Tables']['devices']['Row']
 export type Measurement = Database['public']['Tables']['device_measurements']['Row']
+export type StoredAlert = Database['public']['Tables']['care_alerts']['Row']
 export const DEVICE_OFFLINE_AFTER_MS = 120_000
 const HISTORY_DAYS = 30
 const HISTORY_LIMIT = 2_000
@@ -18,12 +19,16 @@ type Ctx = {
   device: Device | null
   latest: Measurement | null
   measurements: Measurement[]
+  alerts: StoredAlert[]
   loading: boolean
   error: string
+  alertsLoading: boolean
+  alertError: string
   connection: 'none' | 'awaiting' | 'online' | 'offline'
   refresh(): Promise<void>
   pair(id: string, code: string): Promise<string | null>
   unpair(): Promise<string | null>
+  updateAlertStatus(id: string, status: 'acknowledged' | 'resolved'): Promise<string | null>
 }
 
 const DeviceContext = createContext<Ctx | null>(null)
@@ -42,7 +47,7 @@ function testMeasurement(deviceId: string): Measurement {
     received_at: new Date(Date.now() - 25_000).toISOString(),
     heart_rate: 72, spo2: 97, sensor_temperature: 34.2, movement: 18,
     latitude: null, longitude: null, gps_fix_at: null, quality: 'good',
-    heart_rate_quality: 'good', spo2_quality: 'good', temperature_quality: 'good',
+    heart_rate_quality: 'good', spo2_quality: 'good', temperature_quality: 'good', confirmed_fall: false,
     battery_percent: null, created_at: now(),
   }
 }
@@ -52,17 +57,20 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const location = useLocation()
   const [device, setDevice] = useState<Device | null>(null)
   const [measurements, setMeasurements] = useState<Measurement[]>([])
+  const [alerts, setAlerts] = useState<StoredAlert[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [alertsLoading, setAlertsLoading] = useState(false)
+  const [alertError, setAlertError] = useState('')
   const [tick, setTick] = useState(0)
   const requestId = useRef(0)
 
   const refresh = useCallback(async () => {
     const currentRequest = ++requestId.current
     if (auth.status !== 'signed-in' || !auth.patient) {
-      setDevice(null); setMeasurements([]); return
+      setDevice(null); setMeasurements([]); setAlerts([]); return
     }
-    setLoading(true); setError('')
+    setLoading(true); setAlertsLoading(true); setError(''); setAlertError('')
     if (isTest) {
       const state = localStorage.getItem('carelink-test-device')
       if (state === 'none') { setDevice(null); setMeasurements([]) }
@@ -71,11 +79,17 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         setDevice(nextDevice)
         setMeasurements(state === 'awaiting' ? [] : [testMeasurement(nextDevice.id)])
       }
-      setLoading(false); return
+      setAlerts([]); setLoading(false); setAlertsLoading(false); return
     }
-    if (!supabase) { setLoading(false); return }
-    const deviceResult = await supabase.from('devices').select('*').maybeSingle()
+    if (!supabase) { setLoading(false); setAlertsLoading(false); return }
+    const [deviceResult, alertsResult] = await Promise.all([
+      supabase.from('devices').select('*').maybeSingle(),
+      supabase.from('care_alerts').select('*').eq('patient_id', auth.patient.id).order('created_at', { ascending: false }).limit(200),
+    ])
     if (currentRequest !== requestId.current) return
+    if (alertsResult.error) { setAlertError('Unable to load alerts.'); setAlerts([]) }
+    else setAlerts(alertsResult.data ?? [])
+    setAlertsLoading(false)
     if (deviceResult.error) { setError('Unable to load wearable status.'); setLoading(false); return }
     setDevice(deviceResult.data)
     if (!deviceResult.data) { setMeasurements([]); setLoading(false); return }
@@ -126,6 +140,15 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     await refresh(); return null
   }
 
+  async function updateAlertStatus(id: string, status: 'acknowledged' | 'resolved') {
+    if (isTest) return null
+    if (!navigator.onLine) return 'You are offline. Reconnect before updating the alert.'
+    if (!supabase) return 'CareLink is not configured.'
+    const result = await supabase.from('care_alerts').update({ status }).eq('id', id).select('id').maybeSingle()
+    if (result.error || !result.data) return 'Unable to update this alert.'
+    await refresh(); return null
+  }
+
   const latest = measurements.at(-1) ?? null
   const connection = useMemo<Ctx['connection']>(() => {
     void tick
@@ -133,7 +156,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     if (!device.last_contact_at) return 'awaiting'
     return Date.now() - Date.parse(device.last_contact_at) <= DEVICE_OFFLINE_AFTER_MS ? 'online' : 'offline'
   }, [device, tick])
-  return <DeviceContext.Provider value={{ device, latest, measurements, loading, error, connection, refresh, pair, unpair }}>{children}</DeviceContext.Provider>
+  return <DeviceContext.Provider value={{ device, latest, measurements, alerts, loading, error, alertsLoading, alertError, connection, refresh, pair, unpair, updateAlertStatus }}>{children}</DeviceContext.Provider>
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

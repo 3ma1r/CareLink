@@ -225,12 +225,21 @@ export default function History() {
             {selectedAlerts.length ? (
               selectedAlerts.map((a) => (
                 <Link key={a.id} to={`/alerts?event=${a.id}`} className="event-row">
-                  <span className={`event-dot ${a.severity === 'High' ? 'high' : ''}`} />
+                  <span
+                    className={`event-dot ${a.severity === 'High' || a.severity === 'Critical' ? 'high' : ''}`}
+                  />
                   <div>
                     <strong>{a.title}</strong>
-                    <small>{stamp(a.time)}</small>
+                    <small>
+                      Measured {stamp(a.time)}
+                      {a.observedValue != null ? ` · ${a.observedValue} ${a.unit}` : ''}
+                    </small>
                   </div>
-                  <Badge tone={a.severity === 'High' ? 'red' : 'amber'}>{a.severity}</Badge>
+                  <Badge
+                    tone={a.severity === 'High' || a.severity === 'Critical' ? 'red' : 'amber'}
+                  >
+                    {a.severity}
+                  </Badge>
                 </Link>
               ))
             ) : (
@@ -310,7 +319,8 @@ export default function History() {
               Calculated readings<strong>{stats.count}</strong>
             </span>
             <span>
-              Sample events<strong>{selectedAlerts.length}</strong>
+              {sampleMode ? 'Sample events' : 'Alert events'}
+              <strong>{selectedAlerts.length}</strong>
             </span>
             <span>
               Time zone<strong>Muscat · GST</strong>

@@ -1,6 +1,31 @@
-# CareLink · Stage 4
+# CareLink · Stage 5A
 
-CareLink is a responsive React, TypeScript, Vite and Supabase caregiver PWA. Stage 4 connects the existing NodeMCU-32S wearable firmware to the deployed Stage 3 ingestion endpoint and shows the paired device's real measurements and GPS fixes. Stages 1–3 remain intact: caregiver authentication, patient ownership, secure device provisioning and pairing, RLS, idempotent ingestion, PWA behavior, themes, sensor screens, Blynk, SOS/SMS and fall detection.
+CareLink is a responsive React, TypeScript, Vite and Supabase caregiver PWA. Stage 5A adds deterministic server-side health analysis and persistent in-app alerts to the working Stage 4 wearable data flow. Caregiver authentication, patient ownership, secure device provisioning and pairing, RLS, idempotent ingestion, PWA behavior, themes, sensor screens, Blynk, SOS/SMS and fall detection remain intact.
+
+## Stage 5A alert architecture
+
+The device-authenticated Edge Function validates a packet and calls the existing privileged ingestion RPC. Newly inserted measurements are collected and analyzed in chronological order inside the same database transaction; acknowledged duplicate messages are not analyzed again. The private analyzer reads versioned rules from `private.care_alert_rule_definitions` and writes `public.care_alerts`. Browser roles cannot call the analyzer or insert alerts.
+
+The global version 1 rules mirror the thresholds already used by the firmware and web status labels:
+
+| Rule                    | Trigger                                                     | Severity |
+| ----------------------- | ----------------------------------------------------------- | -------- |
+| Low heart rate          | Heart rate below 50 bpm                                     | High     |
+| High heart rate         | Heart rate above 120 bpm                                    | High     |
+| Low SpO₂                | SpO₂ below 90%                                              | Critical |
+| Low sensor temperature  | Sensor temperature below 35°C                               | Moderate |
+| High sensor temperature | Sensor temperature above 38°C                               | High     |
+| Confirmed fall          | Authenticated packet explicitly sets `confirmed_fall: true` | Critical |
+
+Vital rules require the two latest good-quality values for that metric to remain abnormal within 15 minutes. Unstable and missing values remain visible but never confirm, trigger or resolve a health alert. A quality problem in one metric does not block another good-quality metric. The analyzer falls back to the legacy row-level `quality` only for historical-format packets whose per-metric quality fields are absent.
+
+An open vital alert is updated with a newer `last_seen_at` and incremented occurrence count instead of creating repeated records. After an alert closes, the same patient/device/rule has a 60-minute suppression window. Two later good-quality normal values within 15 minutes auto-resolve a vital alert. Falls trigger immediately once per newly accepted source measurement, are idempotent on retry, and never auto-resolve.
+
+Alerts start `active`, may be `acknowledged` by the owning caregiver, and may be `resolved`. Acknowledgement records the authenticated caregiver and server time. History is preserved. `care_alerts` has RLS plus explicit grants: authenticated caregivers can select alerts for their patient and update only the `status` column; anonymous users and browser inserts have no access. The update policy has both `USING` and `WITH CHECK` ownership predicates, while a database trigger owns acknowledgement and resolution metadata.
+
+The Alerts page loads real RLS-filtered records newest-first, exposes acknowledgement/resolution, and shows values, reasons, lifecycle, measurement time and creation time. Dashboard shows the active count and most important recent active alert; History shows alert event lines. These records refresh through the existing controlled one-minute, visibility and reconnect cycle. Test builds retain isolated sample alerts only for Playwright presentation scenarios; production has no sample fallback.
+
+The current physical sketch keeps a confirmed fall only in its in-memory `fallDetected` state and does not put that state in its Stage 4 upload payload. Stage 5A accepts and safely tests the optional authenticated `confirmed_fall` field, but no firmware was changed or flashed, so physical fall-to-PWA delivery remains unavailable until a separately authorized firmware stage transmits that existing state.
 
 ## Web application
 
@@ -26,9 +51,9 @@ x-carelink-device-id: CL-XXXXXXXXXXXX
 Authorization: Device <64-character credential>
 ```
 
-The body contains `firmware_version` and one to ten `measurements`. Each measurement uses a durable `message_id`, UTC `measured_at`, nullable `heart_rate`, `spo2`, `sensor_temperature` and `movement`, quality (`good`, `unstable` or `missing`), plus optional valid `latitude`, `longitude` and `gps_fix_at`. The server validates ranges, rejects stale/future timestamps and deduplicates `(device_id, message_id)`. Retried packets retain their original ID and measurement time.
+The body contains `firmware_version` and one to ten `measurements`. Each measurement uses a durable `message_id`, UTC `measured_at`, nullable `heart_rate`, `spo2`, `sensor_temperature` and `movement`, quality (`good`, `unstable` or `missing`), plus optional valid `latitude`, `longitude`, `gps_fix_at` and boolean `confirmed_fall`. The server validates ranges and types, rejects stale/future timestamps and deduplicates `(device_id, message_id)`. Retried packets retain their original ID and measurement time.
 
-The Stage 2 and Stage 3 database definitions and checks remain in `supabase/migrations` and `supabase/tests`. Hosted functions are in `supabase/functions`. `ALLOWED_ORIGIN=http://localhost:3000` is configured on the existing CareLink project.
+The Stage 2–5A database definitions and checks remain in `supabase/migrations` and `supabase/tests`. Hosted functions are in `supabase/functions`. `ALLOWED_ORIGIN=http://localhost:3000` is configured on the existing CareLink project.
 
 ## Trusted provisioning and pairing
 
@@ -102,6 +127,8 @@ npm run test:e2e
 npm audit
 ```
 
+The safe alert-engine fixture is `supabase/tests/stage_5a_alerts.sql`. It creates temporary users, a patient, a provisioned test device and clearly prefixed measurements inside one transaction, exercises normal/abnormal/unstable/missing/fall/mixed-batch/cooldown/RLS paths, and rolls everything back. It never prints a credential, changes the real paired device, or exposes an alert-generation browser endpoint.
+
 The web tests use an isolated test-mode adapter. Unit tests cover real measurement mapping, null/quality behavior and GPS fix selection. Database tests cover pairing, RLS, ingestion, null preservation, retry deduplication and revocation. Physical verification still requires flashing the real NodeMCU-32S, observing sensor cadence and reset recovery, interrupting Wi-Fi to exercise the LittleFS queue, and confirming delayed rows arrive once each with their original timestamps.
 
 Use this physical end-to-end checklist after provisioning:
@@ -117,6 +144,8 @@ Use this physical end-to-end checklist after provisioning:
 9. Using a separate caregiver account, confirm RLS denies the device and measurements.
 10. Unpair, confirm the credential can no longer ingest, then reprovision before using the physical device again.
 
-## Stage 5 remains
+## Later stages
 
-AI analysis, automatic alert generation, push notifications, caregiver notification delivery and production reporting are intentionally deferred. Stage 4 adds no AI inference, alert automation or notification sending.
+Stage 5B remains responsible for push notification registration, secure delivery, retries and delivery status. Stage 5C remains responsible for AI-assisted analysis, personalized caregiver-approved thresholds/baselines and reporting. Stage 5A sends no push, email, SMS or WhatsApp messages and performs no AI or machine-learning inference.
+
+All thresholds and alerts are prototype monitoring aids. They are not medically validated diagnostic criteria and do not establish a diagnosis.

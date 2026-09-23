@@ -149,7 +149,11 @@ export function HealthChart({
                   <ReferenceLine
                     key={a.id}
                     x={a.time}
-                    stroke={a.severity === 'High' ? 'var(--coral)' : 'var(--amber)'}
+                    stroke={
+                      a.severity === 'High' || a.severity === 'Critical'
+                        ? 'var(--coral)'
+                        : 'var(--amber)'
+                    }
                     strokeDasharray="4 4"
                     label={{
                       value: a.type === 'sos' ? 'SOS' : a.type === 'fall' ? 'Fall' : 'Alert',

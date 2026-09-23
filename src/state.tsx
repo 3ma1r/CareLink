@@ -8,6 +8,7 @@ import { calculateAge } from './auth/validation'
 import { useDevice } from './device/DeviceProvider'
 import type { Reading } from './data/demo'
 import { findLatestGps, mapMeasurement } from './device/measurements'
+import { mapStoredAlert } from './alerts/alerts'
 type Theme = 'system' | 'light' | 'dark'
 function useStore() {
   const [scenario, setScenario] = useState<Scenario>('typical')
@@ -33,20 +34,36 @@ function useStore() {
     () => wearable.measurements.map(mapMeasurement),
     [wearable.measurements],
   )
-  const latestGps = useMemo(
-    () => findLatestGps(wearable.measurements),
-    [wearable.measurements],
+  const realAlerts = useMemo(
+    () =>
+      wearable.alerts.map((alert) =>
+        mapStoredAlert(
+          alert,
+          wearable.measurements.find(
+            (measurement) => measurement.id === alert.source_measurement_id,
+          ),
+        ),
+      ),
+    [wearable.alerts, wearable.measurements],
   )
-  const snapshot = sampleMode ? sampleSnapshot : {
-    readings: realReadings,
-    alerts: [],
-    lastContact: wearable.device?.last_contact_at ? Date.parse(wearable.device.last_contact_at) : 0,
-    location: {
-      coordinates: latestGps ? [latestGps.latitude!, latestGps.longitude!] as [number, number] : null,
-      time: latestGps?.gps_fix_at ? Date.parse(latestGps.gps_fix_at) : null,
-      stale: !latestGps?.gps_fix_at || Date.now() - Date.parse(latestGps.gps_fix_at) > 15 * 60_000,
-    },
-  }
+  const latestGps = useMemo(() => findLatestGps(wearable.measurements), [wearable.measurements])
+  const snapshot = sampleMode
+    ? sampleSnapshot
+    : {
+        readings: realReadings,
+        alerts: realAlerts,
+        lastContact: wearable.device?.last_contact_at
+          ? Date.parse(wearable.device.last_contact_at)
+          : 0,
+        location: {
+          coordinates: latestGps
+            ? ([latestGps.latitude!, latestGps.longitude!] as [number, number])
+            : null,
+          time: latestGps?.gps_fix_at ? Date.parse(latestGps.gps_fix_at) : null,
+          stale:
+            !latestGps?.gps_fix_at || Date.now() - Date.parse(latestGps.gps_fix_at) > 15 * 60_000,
+        },
+      }
   const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme
   useEffect(() => {
     const query = matchMedia('(prefers-color-scheme: dark)')
@@ -90,7 +107,16 @@ function useStore() {
     online,
     sampleMode,
     dataNow: sampleMode ? Date.parse('2026-09-14T12:00:00+04:00') : Date.now(),
-    updateAlert: (id: string, status: AlertStatus) => setStatuses((s) => ({ ...s, [id]: status })),
+    alertsLoading: sampleMode ? false : wearable.alertsLoading,
+    alertError: sampleMode ? '' : wearable.alertError,
+    updateAlert: async (id: string, status: AlertStatus) => {
+      if (sampleMode) {
+        setStatuses((current) => ({ ...current, [id]: status }))
+        return null
+      }
+      if (status === 'Active') return 'An alert cannot be returned to active.'
+      return wearable.updateAlertStatus(id, status === 'Acknowledged' ? 'acknowledged' : 'resolved')
+    },
   }
 }
 const CareContext = createContext<ReturnType<typeof useStore> | null>(null)
