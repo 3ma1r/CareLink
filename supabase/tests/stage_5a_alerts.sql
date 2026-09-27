@@ -1,6 +1,10 @@
 -- Stage 5A integration/security tests. All records and generated credentials are rolled back.
 begin;
 
+-- Keep whole-table count assertions isolated from legitimate production history.
+-- This delete is visible only inside this transaction and is restored by the final rollback.
+delete from public.care_alerts;
+
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','55555555-5555-4555-8555-555555555555','authenticated','authenticated','stage5-owner@example.invalid','',now(),'{}','{"full_name":"Stage Five Owner"}',now(),now()),
 ('00000000-0000-0000-0000-000000000000','66666666-6666-4666-8666-666666666666','authenticated','authenticated','stage5-other@example.invalid','',now(),'{}','{"full_name":"Stage Five Other"}',now(),now());

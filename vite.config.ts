@@ -9,6 +9,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       manifest: {
         name: 'CareLink — Care, connected.',
         short_name: 'CareLink',
@@ -29,11 +32,9 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         dontCacheBustURLsMatching: /[.-][a-zA-Z0-9_-]{8}\.(js|css|woff2)$/,
-        navigateFallback: '/index.html',
-        cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 4000000,
       },
     }),

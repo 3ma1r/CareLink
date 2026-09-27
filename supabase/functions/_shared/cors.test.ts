@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, corsHeadersForOrigin } from './cors'
+import { CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, configuredOrigins, corsHeadersForOrigin, corsHeadersForOrigins } from './cors'
 
 describe('pair-device CORS headers', () => {
   it('allows only the configured origin and the headers sent by supabase-js', () => {
@@ -17,5 +17,13 @@ describe('pair-device CORS headers', () => {
   it('does not reflect another localhost port or use a wildcard', () => {
     expect(corsHeadersForOrigin('http://localhost:5173', 'http://localhost:3000')).toEqual({})
     expect(corsHeadersForOrigin('https://example.com', 'http://localhost:3000')).toEqual({})
+  })
+
+  it('supports an explicit comma-separated development and production allowlist', () => {
+    const configured = 'http://localhost:3000, https://care.example'
+    expect(configuredOrigins(configured)).toEqual(['http://localhost:3000', 'https://care.example'])
+    expect(corsHeadersForOrigins('https://care.example', configured)['Access-Control-Allow-Origin'])
+      .toBe('https://care.example')
+    expect(corsHeadersForOrigins('https://other.example', configured)).toEqual({})
   })
 })

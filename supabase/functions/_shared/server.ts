@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0'
-import { corsHeadersForOrigin } from './cors.ts'
+import { corsHeadersForOrigin, corsHeadersForOrigins } from './cors.ts'
 
 function namedKey(name: string, fallback: string) {
   const raw = Deno.env.get(name)
@@ -25,4 +25,11 @@ export function json(body: unknown, status=200, headers: Record<string,string>={
 
 export function cors(req: Request) {
   return corsHeadersForOrigin(req.headers.get('origin'), Deno.env.get('ALLOWED_ORIGIN'))
+}
+
+export function corsForConfiguredOrigins(req: Request) {
+  return corsHeadersForOrigins(
+    req.headers.get('origin'),
+    Deno.env.get('ALLOWED_ORIGINS') ?? Deno.env.get('ALLOWED_ORIGIN'),
+  )
 }

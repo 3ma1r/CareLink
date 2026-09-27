@@ -15,12 +15,13 @@ import { CareProvider } from './state'
 import App from './App'
 import { AuthProvider } from './auth/AuthProvider'
 import { DeviceProvider } from './device/DeviceProvider'
+import { NotificationProvider } from './notifications/NotificationProvider'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <DeviceProvider><CareProvider><App /></CareProvider></DeviceProvider>
+        <NotificationProvider><DeviceProvider><CareProvider><App /></CareProvider></DeviceProvider></NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

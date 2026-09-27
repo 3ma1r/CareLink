@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.device-ingest]
 verify_jwt = false
+
+[functions.push-subscriptions]
+verify_jwt = false
+
+[functions.push-worker]
+verify_jwt = false

@@ -1,6 +1,16 @@
 export type Database = {
   public: {
     Tables: {
+      push_subscriptions: {
+        Row: {
+          id:string; caregiver_id:string; endpoint:string; p256dh:string; auth_key:string
+          device_label:string|null; active:boolean; last_successful_delivery_at:string|null
+          failure_count:number; revoked_at:string|null; created_at:string; updated_at:string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       devices: {
         Row: { id:string; device_identifier:string; display_name:string|null; device_model:string; provisioned_at:string; paired_patient_id:string|null; paired_at:string|null; last_contact_at:string|null; firmware_version:string|null; status:string; created_at:string; updated_at:string }
         Insert: never; Update: never; Relationships: []

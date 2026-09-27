@@ -1,6 +1,6 @@
-# CareLink · Stage 5A
+# CareLink · Stage 5B
 
-CareLink is a responsive React, TypeScript, Vite and Supabase caregiver PWA. Stage 5A adds deterministic server-side health analysis and persistent in-app alerts to the working Stage 4 wearable data flow. Caregiver authentication, patient ownership, secure device provisioning and pairing, RLS, idempotent ingestion, PWA behavior, themes, sensor screens, Blynk, SOS/SMS and fall detection remain intact.
+CareLink is a responsive React, TypeScript, Vite and Supabase caregiver PWA. Stage 5B adds caregiver-controlled Web Push delivery for new Stage 5A alerts while preserving authentication, patient ownership, secure device pairing, deterministic analysis, RLS, idempotent ingestion, offline PWA behavior, themes and the existing wearable flow.
 
 ## Stage 5A alert architecture
 
@@ -27,6 +27,47 @@ The Alerts page loads real RLS-filtered records newest-first, exposes acknowledg
 
 The current physical sketch keeps a confirmed fall only in its in-memory `fallDetected` state and does not put that state in its Stage 4 upload payload. Stage 5A accepts and safely tests the optional authenticated `confirmed_fall` field, but no firmware was changed or flashed, so physical fall-to-PWA delivery remains unavailable until a separately authorized firmware stage transmits that existing state.
 
+## Stage 5B push architecture
+
+Profile contains the notification control. Permission is requested only after the caregiver presses **Enable notifications**. CareLink distinguishes unsupported browsers, iPhone/iPad browser tabs that must first be installed to the Home Screen, permission not requested, denied permission, a registered subscription, an expired/unregistered subscription and temporary service errors. The UI reports enabled only when the browser has a current `PushSubscription` and the authenticated backend confirms that exact endpoint is active. Disabling deactivates the caregiver-owned server row and then unsubscribes the browser. The explicit logout flow performs the same cleanup before ending the session.
+
+The custom Workbox service worker retains the generated shell precache, update flow and navigation fallback. A `push` event always shows the privacy-safe title **CareLink health alert** and body **A new health alert needs your attention.** It includes no patient, alert, reading, credential or token data. Clicking focuses an existing same-origin window or opens `/alerts`; authentication and RLS still protect the details.
+
+`public.push_subscriptions` stores the caregiver ID, endpoint, Web Push encryption public material, an optional generic browser label and delivery health timestamps/state. It has forced RLS. Authenticated users can select or delete only their own rows; anonymous users have no privileges. Registration goes through `push-subscriptions`, which accepts exact allowed origins, answers preflight before authentication, validates the caregiver access token inside the Function and uses server privileges only after establishing the user ID. The browser receives neither a Supabase privileged key nor the VAPID private key.
+
+An insert-only trigger on `care_alerts` creates one private outbox row per active subscription only when a genuinely new active alert is inserted. The unique `(alert_id, subscription_id)` constraint prevents duplicate delivery. Updates to occurrence count, acknowledgement, resolution and `last_seen_at` do not enqueue. Adding a subscription does not backfill historical alerts. All Stage 5A alert types use the same route, including a backend confirmed-fall alert; the current firmware limitation described above still applies.
+
+The scheduled `push-worker` atomically claims due rows with `FOR UPDATE SKIP LOCKED` and five-minute leases, then performs standards-based RFC 8291 `aes128gcm` payload encryption and VAPID signing with Web Crypto. Successful delivery records its HTTP status and time. Temporary network, rate-limit and server failures use exponential delays starting at 30 seconds, capped at one hour, with five total attempts. HTTP 404/410 permanently fails the delivery and deactivates the endpoint. The worker endpoint accepts only a constant-time checked internal bearer secret. Supabase Cron runs once per minute through `pg_cron` and `pg_net`; its database function reads the worker URL and matching secret from Vault at invocation time. It does nothing while either Vault entry is absent. This follows the current [Supabase scheduled Functions guidance](https://supabase.com/docs/guides/functions/schedule-functions).
+
+### Push configuration
+
+No production web origin is present in this repository. The deployed caregiver Function therefore currently accepts the existing exact `http://localhost:3000` origin through `ALLOWED_ORIGIN`; it never uses a wildcard. Before production use, set `ALLOWED_ORIGINS` to a comma-separated list containing localhost and the exact deployed HTTPS origin. Do not add a guessed preview or production URL.
+
+Required browser and Edge Function configuration names are listed with blank values in `.env.example` and `supabase/functions/.env.example`:
+
+- Browser: `VITE_CARELINK_VAPID_PUBLIC_KEY`
+- Edge Functions: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `PUSH_WORKER_SECRET`, `ALLOWED_ORIGINS`
+- Supabase Vault: `CARELINK_PUSH_WORKER_URL`, `CARELINK_PUSH_WORKER_SECRET`
+
+Generate one P-256 VAPID pair with a trusted Web Push tool. Put the same public key in the browser build and Edge secrets. Put the private key only in Edge Function secrets. `VAPID_SUBJECT` must be a monitored `mailto:` or HTTPS contact. Use the exact dedicated Function URL for the Vault worker URL, and store the same high-entropy worker value in the Edge `PUSH_WORKER_SECRET` and Vault `CARELINK_PUSH_WORKER_SECRET`. Do not commit, echo, log or place either private value in a `VITE_*` variable. Setting the Edge secrets does not require another Function deployment, but changing the browser public key requires a new web build.
+
+Rotating VAPID keys invalidates existing browser subscriptions: deploy the new public key and Edge key pair together, then have caregivers enable notifications again. To rotate the worker secret, update the Edge secret and Vault value together; the scheduler remains safe and dormant if they temporarily differ. Revoke the old values after verifying the new configuration.
+
+Android installed PWAs and compatible desktop browsers support this flow when served from HTTPS (localhost is the development secure-context exception). On iOS/iPadOS 16.4 or later, add CareLink to the Home Screen, launch it from that icon, sign in and then enable notifications. A normal Safari tab is intentionally shown installation guidance instead of a permission prompt.
+
+The Vite development server does not install the production service worker. For localhost push testing, configure the public key, run `npm run build`, then serve the production output on the already allowed origin with `npm run preview -- --port 3000`. Offline caching and notification handling should be verified from that preview. A real mobile device cannot use another computer's `localhost`; use the final HTTPS deployment for physical Android and iPhone tests.
+
+Manual mobile verification after the missing configuration is supplied:
+
+1. Deploy the frontend over HTTPS with the public VAPID key and add its exact origin to `ALLOWED_ORIGINS`.
+2. Add the worker URL and internal worker secret to Vault, and set the matching Edge secrets plus the VAPID pair and subject.
+3. On Android, install/open the PWA, sign in, open Profile and press **Enable notifications**; accept the browser prompt.
+4. On iPhone/iPad 16.4+, use Share → **Add to Home Screen**, launch that installed icon, sign in, open Profile and press **Enable notifications**.
+5. Confirm Profile reports enabled, close or background the PWA, and create one controlled new Stage 5A alert through the existing authenticated ingestion test path.
+6. Confirm exactly one generic system notification arrives on each enabled device, opens `/alerts`, and reveals details only after authentication.
+7. Acknowledge and resolve the alert and confirm neither action creates another system notification.
+8. Disable notifications and confirm the browser no longer receives later alerts. Sign out and verify protected alert data cannot be opened from the notification route.
+
 ## Web application
 
 Requires Node.js 22.12+ and npm.
@@ -37,7 +78,7 @@ Copy-Item .env.example .env
 npm run dev
 ```
 
-The browser `.env` contains only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Never put a service-role key, device credential or pairing code in a `VITE_*` variable. Auth uses persisted PKCE sessions. Browser roles can select only the device and measurements related to their owned patient; they cannot ingest readings or access credential hashes.
+The browser `.env` contains `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and the safe public `VITE_CARELINK_VAPID_PUBLIC_KEY`. Never put a service-role key, VAPID private key, worker secret, device credential or pairing code in a `VITE_*` variable. Auth uses persisted PKCE sessions. Browser roles can select only the device, measurements, alerts and push subscriptions related to their owned account; they cannot ingest readings or access credential hashes.
 
 The shared `DeviceProvider` fetches up to 2,000 measurements from the last 30 days and separately fetches the latest row as a fallback. It refreshes once per minute only while the tab is visible and online, and refreshes when the tab becomes visible or the browser reconnects. Dashboard, History and Location map database rows into the established chart and GPS models. A paired device with no measurements shows honest empty states. The sample adapter and demo controls are enabled only in test builds, so production never combines sample readings with wearable readings.
 
@@ -53,7 +94,7 @@ Authorization: Device <64-character credential>
 
 The body contains `firmware_version` and one to ten `measurements`. Each measurement uses a durable `message_id`, UTC `measured_at`, nullable `heart_rate`, `spo2`, `sensor_temperature` and `movement`, quality (`good`, `unstable` or `missing`), plus optional valid `latitude`, `longitude`, `gps_fix_at` and boolean `confirmed_fall`. The server validates ranges and types, rejects stale/future timestamps and deduplicates `(device_id, message_id)`. Retried packets retain their original ID and measurement time.
 
-The Stage 2–5A database definitions and checks remain in `supabase/migrations` and `supabase/tests`. Hosted functions are in `supabase/functions`. `ALLOWED_ORIGIN=http://localhost:3000` is configured on the existing CareLink project.
+The Stage 2–5B database definitions and checks remain in `supabase/migrations` and `supabase/tests`. Hosted functions are in `supabase/functions`. `ALLOWED_ORIGIN=http://localhost:3000` is configured on the existing CareLink project; use `ALLOWED_ORIGINS` when the exact production origin becomes known.
 
 ## Trusted provisioning and pairing
 
@@ -127,7 +168,7 @@ npm run test:e2e
 npm audit
 ```
 
-The safe alert-engine fixture is `supabase/tests/stage_5a_alerts.sql`. It creates temporary users, a patient, a provisioned test device and clearly prefixed measurements inside one transaction, exercises normal/abnormal/unstable/missing/fall/mixed-batch/cooldown/RLS paths, and rolls everything back. It never prints a credential, changes the real paired device, or exposes an alert-generation browser endpoint.
+The safe alert-engine fixture is `supabase/tests/stage_5a_alerts.sql`. The Stage 5B fixture is `supabase/tests/stage_5b_push.sql`; it covers no backfill, ownership/RLS, multiple subscriptions, exact-once enqueueing, lifecycle non-resends, atomic leases, delivery success, retry backoff, retry bounds and 410 invalidation. Both create isolated records inside transactions and roll back. External push HTTP is mocked in unit tests, so a passing suite does not claim a notification reached a physical phone.
 
 The web tests use an isolated test-mode adapter. Unit tests cover real measurement mapping, null/quality behavior and GPS fix selection. Database tests cover pairing, RLS, ingestion, null preservation, retry deduplication and revocation. Physical verification still requires flashing the real NodeMCU-32S, observing sensor cadence and reset recovery, interrupting Wi-Fi to exercise the LittleFS queue, and confirming delayed rows arrive once each with their original timestamps.
 
@@ -146,6 +187,6 @@ Use this physical end-to-end checklist after provisioning:
 
 ## Later stages
 
-Stage 5B remains responsible for push notification registration, secure delivery, retries and delivery status. Stage 5C remains responsible for AI-assisted analysis, personalized caregiver-approved thresholds/baselines and reporting. Stage 5A sends no push, email, SMS or WhatsApp messages and performs no AI or machine-learning inference.
+Stage 5C remains responsible for AI-assisted analysis, personalized caregiver-approved thresholds/baselines and reporting. Stage 5B performs no AI or machine-learning inference.
 
 All thresholds and alerts are prototype monitoring aids. They are not medically validated diagnostic criteria and do not establish a diagnosis.
