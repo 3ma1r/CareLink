@@ -40,7 +40,6 @@ import {
 } from '../components/UI'
 import { HealthChart, MovementChart } from '../components/Charts'
 import { AIInsights } from '../components/AIInsights'
-import { PersonalizedHealthSummary } from '../components/PersonalizedHealthSummary'
 import { useDevice } from '../device/DeviceProvider'
 const icons = { heartRate: Heart, spo2: Droplets, temperature: Thermometer }
 export default function Dashboard() {
@@ -140,8 +139,7 @@ export default function Dashboard() {
                 <ChevronRight size={17} />
               </div>
               <div className="vital-value">
-                {formatValue(value, metric)}
-                <span>{metrics[metric].unit}</span>
+                {formatValue(value, metric)} <span>{metrics[metric].unit}</span>
               </div>
               <div className="vital-caption">
                 {latest ? qualityText(latest, metric) : 'No reading'}
@@ -245,7 +243,6 @@ export default function Dashboard() {
           </Link>
         </aside>
       </div>
-      <PersonalizedHealthSummary />
       <AIInsights />
       <div className="page-bottom-note">
         <Badge tone="muted">{sampleMode ? 'Demo — sample data' : 'Paired wearable data'}</Badge>

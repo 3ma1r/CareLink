@@ -13,17 +13,36 @@ async function noOverflow(page: Page) {
   )
 }
 
-test('summary controls are accessible and sample mode never presents fabricated production conclusions', async ({ page }) => {
+test('summary controls are accessible and sample mode never presents fabricated production conclusions', async ({
+  page,
+}) => {
   await page.goto('/')
   const section = page.getByRole('region', { name: 'Personalized Health Summary' })
+  await expect(section).toBeHidden()
+  const disclosure = page.getByRole('button', { name: 'View health summary' })
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+  await disclosure.click()
   await expect(section).toBeVisible()
   await expect(section).toContainText('Sample mode: no production health summary is shown')
   await expect(section.locator('.health-summary-overview')).toHaveCount(0)
   const periods = section.getByRole('group', { name: 'Health summary period' })
-  await expect(periods.getByRole('button', { name: 'Past 24 hours' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(periods.getByRole('button', { name: 'Past 24 hours' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await periods.getByRole('button', { name: 'Past 7 days' }).focus()
   await page.keyboard.press('Enter')
-  await expect(periods.getByRole('button', { name: 'Past 7 days' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(periods.getByRole('button', { name: 'Past 7 days' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByRole('button', { name: 'Hide health summary' }).click()
+  await expect(section).toBeHidden()
+  await page.getByRole('button', { name: 'View health summary' }).click()
+  await expect(periods.getByRole('button', { name: 'Past 7 days' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 })
     for (const theme of ['light', 'dark']) {
@@ -48,6 +67,7 @@ test('all routes render at phone, tablet, and desktop widths in both themes', as
       await page.getByRole('button', { name: `Use ${theme} theme` }).click()
       for (const route of ['/', '/history', '/alerts', '/location', '/profile']) {
         await page.goto(route)
+        await expect(page.locator('.entry-splash')).toBeHidden()
         await expect(page.locator('h1')).toBeVisible()
         await page.evaluate(() => document.fonts.ready)
         await noOverflow(page)
@@ -76,7 +96,9 @@ test('theme, patient editing, navigation, and personalized insight states work',
     .click()
   await page.getByLabel('Patient full name').fill('Ahmed Ali')
   await page.getByRole('button', { name: 'Save changes' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Account and patient details saved' })).toBeVisible()
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Account and patient details saved' }),
+  ).toBeVisible()
   await page
     .getByRole('navigation', { name: 'Mobile navigation' })
     .getByRole('link', { name: 'Dashboard' })
@@ -87,12 +109,15 @@ test('theme, patient editing, navigation, and personalized insight states work',
   const preview = page.getByLabel('Personalized insight preview')
   const section = page.locator('.personalized-section')
   await preview.selectOption('learning')
-  await expect(section).toContainText('Learning heart-rate baseline')
-  await expect(section).toContainText('18 of 30 good readings')
+  await expect(section).toContainText('Learning')
+  const heartDetails = section.locator('.baseline-card').first().getByText('View details')
+  await heartDetails.click()
+  await expect(section.locator('.baseline-card').first()).toContainText('18 / 30')
+  await expect(section.locator('.baseline-card').first()).toContainText('Observation days (UTC)')
   await expect(section).toContainText('SpO₂')
   await expect(section).toContainText('Personal baseline ready')
   await preview.selectOption('usual')
-  await expect(section).toContainText('Latest evaluated patterns were close to baseline')
+  await expect(section).toContainText('Latest pattern was close to baseline')
   await preview.selectOption('unusual')
   await expect(section).toContainText(
     'Heart rate has been consistently higher than this patient’s recent baseline.',
@@ -102,15 +127,17 @@ test('theme, patient editing, navigation, and personalized insight states work',
   await section.getByText('Resolved personalized insights (1)').click()
   await expect(section.locator('.personalized-insight.resolved')).toContainText('Resolved')
   await preview.selectOption('insufficient')
-  await expect(section).toContainText('More recent good-quality data is needed')
+  await expect(section).toContainText('More recent good-quality readings needed')
   await preview.selectOption('unavailable')
-  await expect(section.getByRole('alert')).toContainText('Health alerts continue to work independently')
+  await expect(section.getByRole('alert')).toContainText(
+    'Health alerts continue to work independently',
+  )
   await preview.selectOption('awaiting')
-  await expect(section).toContainText('No personalized insight yet')
+  await expect(section).toContainText('Learning')
   await expect(section.locator('.baseline-card.empty')).toHaveCount(3)
 })
 
-test('history date, metric and range controls update real samples and PDF stays a preview', async ({
+test('history date, metric and range controls update real samples and PDF downloads locally', async ({
   page,
 }) => {
   await page.goto('/')
@@ -140,13 +167,12 @@ test('history date, metric and range controls update real samples and PDF stays 
   await page.getByLabel('History start date').fill('2026-09-10')
   await page.getByLabel('History end date').fill('2026-09-11')
   await expect(page.locator('.period-label')).toContainText('10 September 2026')
+  const pendingDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Download PDF Report' }).click()
-  await expect(page.getByRole('dialog')).toContainText('10 September 2026')
-  await expect(page.getByRole('dialog')).toContainText(
-    'PDF export will be added in the reporting stage',
-  )
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).not.toBeVisible()
+  const download = await pendingDownload
+  expect(download.suggestedFilename()).toMatch(/^CareLink-Health-Report-\d{4}-\d{2}-\d{2}\.pdf$/)
+  await download.saveAs('qa/health-report.pdf')
+  await expect(page.getByRole('button', { name: 'Download PDF Report' })).toBeEnabled()
   await page.getByLabel('History start date').fill('2026-09-12')
   await expect(page.getByRole('alert')).toContainText('Choose an end date')
   await expect(page.getByRole('button', { name: 'Download PDF Report' })).toBeDisabled()
@@ -260,7 +286,9 @@ test('production PWA caches the shell and clearly labels a browser-offline reloa
   await context.setOffline(false)
 })
 
-test('notification settings require an explicit action and restore the registered state', async ({ page }) => {
+test('notification settings require an explicit action and restore the registered state', async ({
+  page,
+}) => {
   await page.goto('/profile')
   const toggle = page.getByRole('switch', { name: 'CareLink health alert notifications' })
   await expect(toggle).toHaveAttribute('aria-checked', 'false')

@@ -1,14 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
-import { Bell, ChevronDown, FlaskConical, House, MapPin, SlidersHorizontal, UserRound, WifiOff } from 'lucide-react'
+import {
+  Bell,
+  ChevronDown,
+  FlaskConical,
+  House,
+  MapPin,
+  SlidersHorizontal,
+  UserRound,
+  WifiOff,
+} from 'lucide-react'
 import { useCare } from './state'
 import { useAuth } from './auth/AuthProvider'
 import { useDevice } from './device/DeviceProvider'
 import { scenarios } from './data/demo'
 import type { AIState, Scenario } from './data/demo'
 import { Badge, Brand, PrototypeNote, ThemeToggle } from './components/UI'
-import { AuthLayout, AuthStatusScreen, ForgotPassword, PublicOnly, Register, ResetPassword, SignIn, Welcome } from './pages/AuthPages'
+import {
+  AuthLayout,
+  AuthStatusScreen,
+  ForgotPassword,
+  PublicOnly,
+  Register,
+  ResetPassword,
+  SignIn,
+  Welcome,
+} from './pages/AuthPages'
 import PatientSetup from './pages/PatientSetup'
 import Dashboard from './pages/Dashboard'
 import History from './pages/History'
@@ -26,19 +44,32 @@ const navigation = [
   { path: '/profile', label: 'Profile', icon: UserRound },
 ]
 
-function Protected({ children, needsPatient = true }: { children: ReactNode; needsPatient?: boolean }) {
+function Protected({
+  children,
+  needsPatient = true,
+}: {
+  children: ReactNode
+  needsPatient?: boolean
+}) {
   const auth = useAuth()
   const location = useLocation()
-  if (auth.status === 'loading' || auth.status === 'configured-error' || auth.status === 'offline') return <AuthStatusScreen />
-  if (auth.status !== 'signed-in') return <Navigate to="/sign-in" state={{ from: location.pathname }} replace />
+  if (auth.status === 'loading' || auth.status === 'configured-error' || auth.status === 'offline')
+    return <AuthStatusScreen />
+  if (auth.status !== 'signed-in')
+    return <Navigate to="/sign-in" state={{ from: location.pathname }} replace />
   if (needsPatient && !auth.patient) return <Navigate to="/patient-setup" replace />
   return <>{children}</>
 }
 
 function ResetRoute() {
   const auth = useAuth()
-  if (auth.status === 'loading' || auth.status === 'configured-error' || auth.status === 'offline') return <AuthStatusScreen />
-  return <AuthLayout><ResetPassword/></AuthLayout>
+  if (auth.status === 'loading' || auth.status === 'configured-error' || auth.status === 'offline')
+    return <AuthStatusScreen />
+  return (
+    <AuthLayout>
+      <ResetPassword />
+    </AuthLayout>
+  )
 }
 
 function AppShell() {
@@ -51,23 +82,193 @@ function AppShell() {
   const initial = useRef(true)
   const activeCount = alerts.filter((a) => a.status === 'Active').length
   useEffect(() => {
-    if (initial.current) { initial.current = false; return }
+    if (initial.current) {
+      initial.current = false
+      return
+    }
     window.scrollTo({ top: 0, behavior: 'instant' })
     main.current?.focus({ preventScroll: true })
-    if (location.hash) requestAnimationFrame(() => document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'instant' }))
+    if (location.hash)
+      requestAnimationFrame(() =>
+        document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'instant' }),
+      )
   }, [location.pathname, location.hash])
   const caregiverName = auth.profile?.full_name || 'Caregiver'
-  return <div className="app-shell">
-    <a href="#main-content" className="skip-link">Skip to content</a>
-    <header className="app-header"><div className="header-inner"><Brand/><nav className="desktop-nav" aria-label="Main navigation">{navigation.map(({path,label,icon:Icon})=><NavLink key={path} to={path} end={path==='/' } className={({isActive})=>isActive||(path==='/'&&location.pathname==='/history')?'active':''}><Icon size={18}/>{label}{label==='Alerts'&&activeCount>0&&<span className="nav-count">{activeCount}</span>}</NavLink>)}</nav><div className="header-actions"><ThemeToggle/><Link to="/alerts" className="icon-button header-bell" aria-label={`Alerts, ${activeCount} active`}><Bell size={20}/>{activeCount>0&&<i/>}</Link><Link to="/profile" className="header-avatar" aria-label={`${caregiverName}’s profile`}>{caregiverName.slice(0,1).toUpperCase()}</Link></div></div></header>
-    <div className="demo-strip"><div><span><FlaskConical size={13}/>{sampleMode ? 'Demo — sample health data' : device ? 'Live — paired wearable data' : 'Monitoring inactive — no wearable paired'}</span>{sampleMode&&<span className="sample-clock">14 Sep 2026 · 12:00 GST <i/>Fixed sample timeline</span>}</div></div>
-    {!online&&<div className="offline-banner" role="status"><WifiOff size={18}/>You’re offline. Account changes are disabled and {sampleMode ? 'the displayed readings are cached samples.' : 'the displayed wearable readings may be stale.'}</div>}
-    <main ref={main} tabIndex={-1} id="main-content" className="main-content"><Routes><Route path="/" element={<Dashboard/>}/><Route path="/history" element={<History/>}/><Route path="/alerts" element={<Alerts/>}/><Route path="/location" element={<Location/>}/><Route path="/profile" element={<Profile/>}/><Route path="/pair-device" element={<PairDevice/>}/><Route path="*" element={<div className="empty-state"><h1>Let’s get you back to care.</h1><p>This page isn’t available.</p><Link className="button primary" to="/">Go to dashboard</Link></div>}/></Routes>
-      {sampleMode&&<section className="demo-controls"><button className="demo-controls-toggle" aria-expanded={controls} aria-controls="demo-controls-panel" onClick={()=>setControls(!controls)}><span><SlidersHorizontal size={16}/>Demo controls<Badge tone="muted">Prototype tools</Badge></span><span>{scenarios.find((s)=>s.value===scenario)?.label}<ChevronDown size={16} className={controls?'rotated':''}/></span></button>{controls&&<div id="demo-controls-panel" className="demo-controls-panel"><p>Explore sample states. These controls never change the signed-in account or patient ownership.</p><div className="demo-controls-fields"><label>Device & data scenario<select value={scenario} onChange={(e)=>setScenario(e.target.value as Scenario)}>{scenarios.map((s)=><option key={s.value} value={s.value}>{s.label}</option>)}</select></label><label>Personalized insight preview<select value={aiState} onChange={(e)=>setAiState(e.target.value as AIState)}><option value="awaiting">Demo: No analysis data</option><option value="learning">Demo: Partial baseline learning</option><option value="usual">Demo: Usual recent pattern</option><option value="unusual">Demo: Active personalized insight</option><option value="resolved">Demo: Resolved personalized insight</option><option value="insufficient">Demo: Insufficient recent data</option><option value="unavailable">Demo: Service unavailable</option></select></label></div><p className="data-note" role="status">Active scenario: {scenarios.find((s)=>s.value===scenario)?.label}. Scenario changes reset alert actions. Sample clock stays fixed.</p></div>}</section>}
-      <footer className="app-footer"><PrototypeNote/><span>CareLink <span className="text-accent">♥</span> Care, connected.</span></footer>
-    </main>
-    <nav className="bottom-nav" aria-label="Mobile navigation">{navigation.map(({path,label,icon:Icon})=><NavLink key={path} to={path} end={path==='/' } className={({isActive})=>isActive||(path==='/'&&location.pathname==='/history')?'active':''}><span><Icon size={23}/>{label==='Alerts'&&activeCount>0&&<i className="mobile-alert-dot"/>}</span><span>{label}</span></NavLink>)}</nav>
-  </div>
+  return (
+    <div className="app-shell">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+      <header className="app-header">
+        <div className="header-inner">
+          <Brand />
+          <nav className="desktop-nav" aria-label="Main navigation">
+            {navigation.map(({ path, label, icon: Icon }) => (
+              <NavLink
+                key={path}
+                to={path}
+                end={path === '/'}
+                className={({ isActive }) =>
+                  isActive || (path === '/' && location.pathname === '/history') ? 'active' : ''
+                }
+              >
+                <Icon size={18} />
+                {label}
+                {label === 'Alerts' && activeCount > 0 && (
+                  <span className="nav-count">{activeCount}</span>
+                )}
+              </NavLink>
+            ))}
+          </nav>
+          <div className="header-actions">
+            <ThemeToggle />
+            <Link
+              to="/alerts"
+              className="icon-button header-bell"
+              aria-label={`Alerts, ${activeCount} active`}
+            >
+              <Bell size={20} />
+              {activeCount > 0 && <i />}
+            </Link>
+            <Link to="/profile" className="header-avatar" aria-label={`${caregiverName}’s profile`}>
+              {caregiverName.slice(0, 1).toUpperCase()}
+            </Link>
+          </div>
+        </div>
+      </header>
+      <div className="demo-strip">
+        <div>
+          <span>
+            <FlaskConical size={13} />
+            {sampleMode
+              ? 'Demo — sample health data'
+              : device
+                ? 'Live — paired wearable data'
+                : 'Monitoring inactive — no wearable paired'}
+          </span>
+          {sampleMode && (
+            <span className="sample-clock">
+              14 Sep 2026 · 12:00 GST <i />
+              Fixed sample timeline
+            </span>
+          )}
+        </div>
+      </div>
+      {!online && (
+        <div className="offline-banner" role="status">
+          <WifiOff size={18} />
+          You’re offline. Account changes are disabled and{' '}
+          {sampleMode
+            ? 'the displayed readings are cached samples.'
+            : 'the displayed wearable readings may be stale.'}
+        </div>
+      )}
+      <main ref={main} tabIndex={-1} id="main-content" className="main-content">
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/alerts" element={<Alerts />} />
+          <Route path="/location" element={<Location />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/pair-device" element={<PairDevice />} />
+          <Route
+            path="*"
+            element={
+              <div className="empty-state">
+                <h1>Let’s get you back to care.</h1>
+                <p>This page isn’t available.</p>
+                <Link className="button primary" to="/">
+                  Go to dashboard
+                </Link>
+              </div>
+            }
+          />
+        </Routes>
+        {sampleMode && (
+          <section className="demo-controls">
+            <button
+              className="demo-controls-toggle"
+              aria-expanded={controls}
+              aria-controls="demo-controls-panel"
+              onClick={() => setControls(!controls)}
+            >
+              <span>
+                <SlidersHorizontal size={16} />
+                Demo controls<Badge tone="muted">Sample tools</Badge>
+              </span>
+              <span>
+                {scenarios.find((s) => s.value === scenario)?.label}
+                <ChevronDown size={16} className={controls ? 'rotated' : ''} />
+              </span>
+            </button>
+            {controls && (
+              <div id="demo-controls-panel" className="demo-controls-panel">
+                <p>
+                  Explore sample states. These controls never change the signed-in account or
+                  patient ownership.
+                </p>
+                <div className="demo-controls-fields">
+                  <label>
+                    Device & data scenario
+                    <select
+                      value={scenario}
+                      onChange={(e) => setScenario(e.target.value as Scenario)}
+                    >
+                      {scenarios.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Personalized insight preview
+                    <select value={aiState} onChange={(e) => setAiState(e.target.value as AIState)}>
+                      <option value="awaiting">Demo: No analysis data</option>
+                      <option value="learning">Demo: Partial baseline learning</option>
+                      <option value="usual">Demo: Usual recent pattern</option>
+                      <option value="unusual">Demo: Active personalized insight</option>
+                      <option value="resolved">Demo: Resolved personalized insight</option>
+                      <option value="insufficient">Demo: Insufficient recent data</option>
+                      <option value="unavailable">Demo: Service unavailable</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="data-note" role="status">
+                  Active scenario: {scenarios.find((s) => s.value === scenario)?.label}. Scenario
+                  changes reset alert actions. Sample clock stays fixed.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+        <footer className="app-footer">
+          <PrototypeNote />
+          <span>
+            CareLink <span className="text-accent">♥</span> Care, connected.
+          </span>
+        </footer>
+      </main>
+      <nav className="bottom-nav" aria-label="Mobile navigation">
+        {navigation.map(({ path, label, icon: Icon }) => (
+          <NavLink
+            key={path}
+            to={path}
+            end={path === '/'}
+            className={({ isActive }) =>
+              isActive || (path === '/' && location.pathname === '/history') ? 'active' : ''
+            }
+          >
+            <span>
+              <Icon size={23} />
+              {label === 'Alerts' && activeCount > 0 && <i className="mobile-alert-dot" />}
+            </span>
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  )
 }
 
 export default function App() {
@@ -77,11 +278,16 @@ export default function App() {
   const [minimumShown, setMinimumShown] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [booting, setBooting] = useState(true)
-  const authLanding = useRef((() => {
-    const query = new URLSearchParams(window.location.search)
-    return ['code', 'token_hash', 'type', 'error', 'error_description'].some((key) => query.has(key)) ||
-      /access_token|refresh_token|type=recovery|error_description/.test(window.location.hash)
-  })())
+  const authLanding = useRef(
+    (() => {
+      const query = new URLSearchParams(window.location.search)
+      return (
+        ['code', 'token_hash', 'type', 'error', 'error_description'].some((key) =>
+          query.has(key),
+        ) || /access_token|refresh_token|type=recovery|error_description/.test(window.location.hash)
+      )
+    })(),
+  )
   useEffect(() => {
     const timer = window.setTimeout(() => setMinimumShown(true), 180)
     return () => window.clearTimeout(timer)
@@ -96,29 +302,107 @@ export default function App() {
     const frame = requestAnimationFrame(() => {
       const meta = document.querySelector('meta[name="theme-color"]')
       const entry = booting || location.pathname === '/introduction'
-      meta?.setAttribute('content', entry ? '#061822' : document.documentElement.dataset.theme === 'dark' ? '#0c2229' : '#007b78')
+      meta?.setAttribute(
+        'content',
+        entry
+          ? '#061822'
+          : document.documentElement.dataset.theme === 'dark'
+            ? '#0c2229'
+            : '#007b78',
+      )
     })
     return () => cancelAnimationFrame(frame)
   }, [booting, location.pathname])
   if (booting) return <SplashScreen leaving={leaving} />
-  if (location.pathname === '/' && auth.status === 'signed-out' && !completed && !authLanding.current)
+  if (
+    location.pathname === '/' &&
+    auth.status === 'signed-out' &&
+    !completed &&
+    !authLanding.current
+  )
     return <Navigate to="/introduction" replace />
   const completeOnboarding = () => {
     markOnboardingCompleted()
     setCompleted(true)
   }
   const replay = new URLSearchParams(location.search).get('replay') === '1'
-  return <Routes>
-    <Route path="/introduction" element={auth.status === 'offline' || auth.status === 'configured-error' ? <AuthStatusScreen /> : replay
-      ? auth.status === 'signed-in' ? <OnboardingScreens replay onComplete={completeOnboarding} /> : <Navigate to="/sign-in" replace />
-      : completed || auth.status === 'signed-in' ? <Navigate to={auth.status === 'signed-in' ? '/' : '/sign-in'} replace /> : <OnboardingScreens replay={false} onComplete={completeOnboarding} />} />
-    <Route path="/welcome" element={<PublicOnly><Welcome/></PublicOnly>}/>
-    <Route path="/sign-in" element={<PublicOnly><SignIn/></PublicOnly>}/>
-    <Route path="/register" element={<PublicOnly><Register/></PublicOnly>}/>
-    <Route path="/forgot-password" element={<PublicOnly><ForgotPassword/></PublicOnly>}/>
-    <Route path="/reset-password" element={<ResetRoute/>}/>
-    <Route path="/auth/callback" element={<Protected needsPatient={false}><Navigate to="/" replace/></Protected>}/>
-    <Route path="/patient-setup" element={<Protected needsPatient={false}><PatientSetup/></Protected>}/>
-    <Route path="/*" element={<Protected><AppShell/></Protected>}/>
-  </Routes>
+  return (
+    <Routes>
+      <Route
+        path="/introduction"
+        element={
+          auth.status === 'offline' || auth.status === 'configured-error' ? (
+            <AuthStatusScreen />
+          ) : replay ? (
+            auth.status === 'signed-in' ? (
+              <OnboardingScreens replay onComplete={completeOnboarding} />
+            ) : (
+              <Navigate to="/sign-in" replace />
+            )
+          ) : completed || auth.status === 'signed-in' ? (
+            <Navigate to={auth.status === 'signed-in' ? '/' : '/sign-in'} replace />
+          ) : (
+            <OnboardingScreens replay={false} onComplete={completeOnboarding} />
+          )
+        }
+      />
+      <Route
+        path="/welcome"
+        element={
+          <PublicOnly>
+            <Welcome />
+          </PublicOnly>
+        }
+      />
+      <Route
+        path="/sign-in"
+        element={
+          <PublicOnly>
+            <SignIn />
+          </PublicOnly>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <PublicOnly>
+            <Register />
+          </PublicOnly>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <PublicOnly>
+            <ForgotPassword />
+          </PublicOnly>
+        }
+      />
+      <Route path="/reset-password" element={<ResetRoute />} />
+      <Route
+        path="/auth/callback"
+        element={
+          <Protected needsPatient={false}>
+            <Navigate to="/" replace />
+          </Protected>
+        }
+      />
+      <Route
+        path="/patient-setup"
+        element={
+          <Protected needsPatient={false}>
+            <PatientSetup />
+          </Protected>
+        }
+      />
+      <Route
+        path="/*"
+        element={
+          <Protected>
+            <AppShell />
+          </Protected>
+        }
+      />
+    </Routes>
+  )
 }

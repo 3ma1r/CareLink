@@ -1,6 +1,9 @@
-import { Activity, CheckCircle2, Clock3, ShieldCheck, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { Activity, Sparkles } from 'lucide-react'
 import { useCare } from '../state'
+import { stamp } from '../data/demo'
 import { Badge } from './UI'
+import { PersonalizedHealthSummary } from './PersonalizedHealthSummary'
 import {
   evaluationStateLabel,
   formatPersonalizedValue,
@@ -9,150 +12,156 @@ import {
   personalizedMetric,
   selectPersonalizedPresentation,
 } from '../insights/insights'
-import type { PersonalizedBaseline, PersonalizedInsight } from '../device/DeviceProvider'
-
-const metricOrder: PersonalizedBaseline['metric'][] = ['heart_rate', 'spo2', 'temperature']
-const time = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Muscat',
-})
-
-function BaselineCard({ metric, baseline }: { metric: PersonalizedBaseline['metric']; baseline?: PersonalizedBaseline }) {
-  const definition = personalizedMetric[metric]
-  if (!baseline) {
-    return (
-      <article className="baseline-card empty">
-        <h3>{definition.label}</h3>
-        <strong>No baseline data yet</strong>
-        <p>Waiting for the first secure analysis refresh.</p>
-      </article>
-    )
-  }
-  const sampleProgress = Math.min(100, (baseline.sample_count / baseline.required_sample_count) * 100)
-  const ready = baseline.readiness === 'ready'
-  return (
-    <article className={`baseline-card ${ready ? 'ready' : 'learning'}`}>
-      <div className="baseline-heading">
-        <span className="insight-metric-icon"><Activity size={17} /></span>
-        <div>
-          <h3>{definition.label}</h3>
-          <strong>{ready ? 'Personal baseline ready' : `Learning ${definition.learningLabel} baseline`}</strong>
-        </div>
-        <Badge tone={ready ? 'blue' : 'muted'}>{ready ? 'Ready' : 'Learning'}</Badge>
-      </div>
-      <progress value={sampleProgress} max="100" aria-label={`${definition.label} baseline progress`} />
-      <div className="baseline-requirements">
-        <span><b>{baseline.sample_count}</b> of {baseline.required_sample_count} good readings</span>
-        <span><b>{baseline.distinct_day_count}</b> of {baseline.required_day_count} UTC observation days</span>
-        <span><b>{Math.floor(baseline.coverage_hours)}</b> of {Math.floor(baseline.required_coverage_hours)} coverage hours</span>
-      </div>
-      <p className="baseline-state">{evaluationStateLabel(baseline.latest_evaluation_state)}</p>
-      <details>
-        <summary>Technical baseline details</summary>
-        <dl>
-          <div><dt>Observed median</dt><dd>{baseline.baseline_median === null ? 'Not available' : formatPersonalizedValue(metric, baseline.baseline_median)}</dd></div>
-          <div><dt>Median absolute deviation</dt><dd>{baseline.median_absolute_deviation ?? 'Not available'}</dd></div>
-          <div><dt>Algorithm</dt><dd>{baseline.algorithm_version}</dd></div>
-        </dl>
-      </details>
-    </article>
-  )
-}
-
-function InsightCard({ insight }: { insight: PersonalizedInsight }) {
-  const active = insight.status === 'active'
-  return (
-    <article className={`personalized-insight ${insight.status}`}>
-      <div className="personalized-insight-heading">
-        <span className="insight-metric-icon">{active ? <Sparkles size={18} /> : <CheckCircle2 size={18} />}</span>
-        <div>
-          <h3>{insightMessage(insight)}</h3>
-          <p>{insightEvidence(insight)}</p>
-        </div>
-        <Badge tone={active ? 'amber' : 'muted'}>{active ? 'Active insight' : 'Resolved'}</Badge>
-      </div>
-      <div className="insight-context">
-        <span><Clock3 size={14} />Last observed {time.format(new Date(insight.last_observed_at))}</span>
-        <span>Data confidence: {insight.confidence}</span>
-      </div>
-      <p className="confidence-note">Confidence describes data sufficiency and consistency, not the probability of illness.</p>
-      <details>
-        <summary>Why this was flagged</summary>
-        <dl>
-          <div><dt>Recent median</dt><dd>{formatPersonalizedValue(insight.metric, insight.recent_median)}</dd></div>
-          <div><dt>Baseline median</dt><dd>{formatPersonalizedValue(insight.metric, insight.baseline_median)}</dd></div>
-          <div><dt>Difference</dt><dd>{formatPersonalizedValue(insight.metric, insight.deviation)}</dd></div>
-          <div><dt>Robust deviation score</dt><dd>{insight.robust_score.toFixed(2)}</dd></div>
-          <div><dt>Baseline evidence</dt><dd>{insight.baseline_sample_count} good readings</dd></div>
-          <div><dt>Algorithm</dt><dd>{insight.algorithm_version}</dd></div>
-        </dl>
-      </details>
-    </article>
-  )
-}
 
 export function AIInsights() {
-  const {
-    aiState, sampleMode, personalizedBaselines, personalizedInsights,
-    insightsLoading, insightError,
-  } = useCare()
+  const care = useCare()
+  const [expanded, setExpanded] = useState(false)
   const { baselines, insights, error } = selectPersonalizedPresentation(
-    sampleMode,
-    aiState,
-    personalizedBaselines,
-    personalizedInsights,
-    insightError,
+    care.sampleMode,
+    care.aiState,
+    care.personalizedBaselines,
+    care.personalizedInsights,
+    care.insightError,
   )
-  const active = insights.filter((insight) => insight.status === 'active')
-  const resolved = insights.filter((insight) => insight.status === 'resolved')
-  const hasUsual = baselines.some((baseline) => baseline.latest_evaluation_state === 'usual')
-  const needsRecent = baselines.some((baseline) => baseline.latest_evaluation_state === 'insufficient_recent_data')
-
+  const active = insights.filter((item) => item.status === 'active')
+  const resolved = insights.filter((item) => item.status === 'resolved')
   return (
     <section className="personalized-section card" aria-labelledby="personalized-insights-title">
       <div className="personalized-title">
         <div>
-          <span className="eyebrow">PROTOTYPE DECISION SUPPORT</span>
-          <h2 id="personalized-insights-title"><Sparkles size={21} />Personalized Insights</h2>
-          <p>Compares good-quality readings with this patient’s own recent observed pattern.</p>
+          <h2 id="personalized-insights-title">
+            <Sparkles size={21} />
+            Personalized Insights
+          </h2>
+          <p>A clearer view of changes from your patient's usual pattern.</p>
         </div>
-        <Badge tone="muted">No external AI service</Badge>
       </div>
-      <div className="insight-boundary" role="note">
-        <span><ShieldCheck size={18} /><b>Health alert</b> Fixed safety rule requires attention.</span>
-        <span><Sparkles size={18} /><b>Personalized insight</b> Unusual change from this patient’s recent pattern.</span>
-      </div>
-
-      {insightsLoading && !sampleMode ? <p className="insight-empty">Loading personalized analysis…</p> : null}
-      {error ? <p className="insight-error" role="alert">Personalized analysis is temporarily unavailable. Health alerts continue to work independently.</p> : null}
-      {!insightsLoading && !error ? (
+      {care.insightsLoading && !care.sampleMode && <p role="status">Checking recent readings…</p>}
+      {error ? (
+        <p className="insight-error" role="alert">
+          Personalized analysis is temporarily unavailable. Health alerts continue to work
+          independently.
+        </p>
+      ) : (
         <>
           <div className="baseline-grid">
-            {metricOrder.map((metric) => (
-              <BaselineCard key={metric} metric={metric} baseline={baselines.find((row) => row.metric === metric)} />
-            ))}
+            {(['heart_rate', 'spo2', 'temperature'] as const).map((metric) => {
+              const baseline = baselines.find((item) => item.metric === metric)
+              const changed = active.some((item) => item.metric === metric)
+              const ready = baseline?.readiness === 'ready'
+              return (
+                <article
+                  key={metric}
+                  className={`baseline-card ${ready ? 'ready' : baseline ? 'learning' : 'empty'}`}
+                >
+                  <div className="baseline-heading">
+                    <span className="insight-metric-icon">
+                      <Activity size={17} />
+                    </span>
+                    <h3>{personalizedMetric[metric].label}</h3>
+                    <Badge tone={changed ? 'amber' : ready ? 'teal' : 'muted'}>
+                      {changed ? 'Change detected' : ready ? 'Baseline ready' : 'Learning'}
+                    </Badge>
+                  </div>
+                  <details>
+                    <summary>View details</summary>
+                    <p>
+                      {ready
+                        ? 'Personal baseline ready.'
+                        : 'More good-quality readings are needed to establish this baseline.'}
+                    </p>
+                    {baseline && (
+                      <>
+                        <p>{evaluationStateLabel(baseline.latest_evaluation_state)}</p>
+                        <dl>
+                          <div>
+                            <dt>Median absolute deviation</dt>
+                            <dd>{baseline.median_absolute_deviation ?? 'Not available'}</dd>
+                          </div>
+                          <div>
+                            <dt>Good readings</dt>
+                            <dd>
+                              {baseline.sample_count} / {baseline.required_sample_count}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Observation days (UTC)</dt>
+                            <dd>
+                              {baseline.distinct_day_count} / {baseline.required_day_count}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Coverage hours</dt>
+                            <dd>
+                              {Math.floor(baseline.coverage_hours)} /{' '}
+                              {baseline.required_coverage_hours}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Personal baseline</dt>
+                            <dd>
+                              {baseline.baseline_median == null
+                                ? 'Not available'
+                                : formatPersonalizedValue(metric, baseline.baseline_median)}
+                            </dd>
+                          </div>
+                        </dl>
+                      </>
+                    )}
+                  </details>
+                </article>
+              )
+            })}
           </div>
-          {active.length ? (
+          {!!active.length && (
             <div className="insight-list" aria-label="Active personalized insights">
               <h3>Changes to review</h3>
-              {active.map((insight) => <InsightCard key={insight.id} insight={insight} />)}
-            </div>
-          ) : (
-            <div className="insight-empty">
-              <strong>{needsRecent ? 'More recent good-quality data is needed' : hasUsual ? 'Latest evaluated patterns were close to baseline' : 'No personalized insight yet'}</strong>
-              <p>{needsRecent ? 'Missing or unstable readings are not treated as healthy and cannot resolve an insight.' : hasUsual ? 'This describes statistical similarity only; it is not a medical assessment.' : 'Learning progress appears per metric as trustworthy history becomes available.'}</p>
+              {active.map((item) => (
+                <article className="personalized-insight active" key={item.id}>
+                  <h3>{insightMessage(item)}</h3>
+                  <details>
+                    <summary>View details</summary>
+                    <p>{insightEvidence(item)}</p>
+                    <p>Last observed: {stamp(Date.parse(item.last_observed_at))}</p>
+                    <p>Robust deviation score: {item.robust_score.toFixed(2)}</p>
+                    <p>
+                      Recent: {formatPersonalizedValue(item.metric, item.recent_median)} · Personal
+                      baseline: {formatPersonalizedValue(item.metric, item.baseline_median)}
+                    </p>
+                    <p>
+                      Data confidence: {item.confidence}. This describes the available evidence, not
+                      the probability of illness.
+                    </p>
+                  </details>
+                </article>
+              ))}
             </div>
           )}
-          {resolved.length ? (
+          {!!resolved.length && (
             <details className="resolved-insights">
               <summary>Resolved personalized insights ({resolved.length})</summary>
-              <div className="insight-list">
-                {resolved.map((insight) => <InsightCard key={insight.id} insight={insight} />)}
-              </div>
+              {resolved.map((item) => (
+                <article className="personalized-insight resolved" key={item.id}>
+                  <h3>{insightMessage(item)}</h3>
+                  <p>Resolved · {insightEvidence(item)}</p>
+                </article>
+              ))}
             </details>
-          ) : null}
+          )}
         </>
-      ) : null}
-      <p className="personalized-disclaimer">Personalized insights describe this patient’s recent sensor pattern. They are not medically validated normal ranges, do not diagnose illness, and do not replace professional medical advice.</p>
+      )}
+      <button
+        type="button"
+        className="button secondary summary-toggle"
+        aria-expanded={expanded}
+        aria-controls="personalized-health-summary"
+        onClick={() => setExpanded(!expanded)}
+      >
+        {expanded ? 'Hide health summary' : 'View health summary'}
+      </button>
+      <div id="personalized-health-summary" hidden={!expanded}>
+        <PersonalizedHealthSummary />
+      </div>
     </section>
   )
 }

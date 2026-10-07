@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { alertValue } from '../alerts/alerts'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   Bell,
@@ -75,10 +76,9 @@ export default function Alerts() {
           <p>
             {sampleMode
               ? `Review sample events from ${patient.name}’s wearable. Demo actions stay in this test session.`
-              : `Review deterministic monitoring alerts from ${patient.name}’s paired wearable.`}
+              : `Review health alerts from ${patient.name}’s paired wearable.`}
           </p>
         </div>
-        <Badge tone="muted">No notifications sent</Badge>
       </div>
       <div className="alerts-toolbar">
         <Segments
@@ -131,10 +131,9 @@ export default function Alerts() {
                   </div>
                   <p>{alert.description}</p>
                   {alert.observedValue != null && (
-                    <p className="alert-observed">
-                      Observed · {alert.observedValue} {alert.unit}
-                    </p>
+                    <p className="alert-observed">Recorded value: {alertValue(alert)}</p>
                   )}
+                  {alert.thresholdText && <p>Alert threshold: {alert.thresholdText}</p>}
                   <div className="alert-meta">
                     <span>
                       <Clock3 size={13} />
@@ -171,11 +170,6 @@ export default function Alerts() {
           </section>
         )}
       </div>
-      <p className="data-note alert-note">
-        <Bell size={16} />
-        This prototype creates in-app records only. It does not deliver notifications or initiate
-        calls.
-      </p>
       <Modal open={!!selected} onClose={() => setParams({})} title="Alert details">
         {selected && (
           <div className="alert-detail">
@@ -186,6 +180,8 @@ export default function Alerts() {
             </div>
             <h3>{selected.title}</h3>
             <p>{selected.description}</p>
+            {selected.observedValue != null && <p>Recorded value: {alertValue(selected)}</p>}
+            {selected.thresholdText && <p>Alert threshold: {selected.thresholdText}</p>}
             <div className="detail-time">
               <Clock3 size={17} />
               Measurement time · {stamp(selected.time)}

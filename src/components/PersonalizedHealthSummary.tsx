@@ -6,10 +6,10 @@ import { useDevice } from '../device/DeviceProvider'
 import { createHealthSummary } from '../summaries/summary'
 import type { SummaryPeriod } from '../summaries/summary'
 import { useCare } from '../state'
-import { Badge, Segments } from './UI'
+import { Segments } from './UI'
 
 const icons = { heartRate: Heart, spo2: Droplets, temperature: Thermometer }
-const names = { heartRate: 'Heart rate', spo2: 'SpO₂', temperature: 'Sensor temperature' }
+const names = { heartRate: 'Heart rate', spo2: 'SpO₂', temperature: 'Temperature' }
 
 export function PersonalizedHealthSummary() {
   const [period, setPeriod] = useState<SummaryPeriod>('24h')
@@ -30,14 +30,12 @@ export function PersonalizedHealthSummary() {
   const stale = offline || !!summaryError
 
   return (
-    <section className="health-summary-section card" aria-labelledby="health-summary-title">
+    <section className="health-summary-section" aria-labelledby="health-summary-title">
       <div className="health-summary-heading">
         <div>
-          <span className="eyebrow">PERSONALIZED CAREGIVER OVERVIEW</span>
           <h2 id="health-summary-title">
             <Activity size={21} /> Personalized Health Summary
           </h2>
-          <p>Based on CareLink’s personalized statistical analysis and verified wearable data.</p>
         </div>
         <Segments
           label="Health summary period"
@@ -87,16 +85,24 @@ export function PersonalizedHealthSummary() {
             </p>
           ) : null}
           <p className="health-summary-overview">{result.overview}</p>
-          <div className="health-summary-context" aria-label="Analysis and health alert context">
-            <span>
-              <b>Personalized changes</b> {result.activeInsights} active · {result.resolvedInsights}{' '}
-              resolved in period
-            </span>
-            <span>
-              <b>Fixed-rule health alerts</b> {result.activeAlerts} active ·{' '}
-              {result.acknowledgedAlerts} acknowledged · {result.resolvedAlerts} resolved in period
-            </span>
-          </div>
+          {result.activeInsights +
+            result.resolvedInsights +
+            result.activeAlerts +
+            result.acknowledgedAlerts +
+            result.resolvedAlerts >
+            0 && (
+            <div className="health-summary-context" aria-label="Analysis and health alert context">
+              <span>
+                <b>Personalized changes</b> {result.activeInsights} active ·{' '}
+                {result.resolvedInsights} resolved in period
+              </span>
+              <span>
+                <b>Fixed-rule health alerts</b> {result.activeAlerts} active ·{' '}
+                {result.acknowledgedAlerts} acknowledged · {result.resolvedAlerts} resolved in
+                period
+              </span>
+            </div>
+          )}
           <div className="health-summary-metrics">
             {result.metrics.map((item) => {
               const Icon = icons[item.metric]
@@ -106,10 +112,18 @@ export function PersonalizedHealthSummary() {
                     <Icon size={18} />
                     {names[item.metric]}
                   </h3>
-                  <p>{item.text}</p>
+                  <p>
+                    {item.good === 0
+                      ? 'No recent reliable readings were available.'
+                      : `${item.good} reliable readings. ${item.trend === 'insufficient' ? 'More readings are needed to describe a trend.' : `Readings showed ${item.trend}.`}`}
+                  </p>
                   <details>
-                    <summary>Data and rule details</summary>
-                    <p>{item.detail}</p>
+                    <summary>View details</summary>
+                    <p>{item.text}</p>
+                    <p>
+                      Good readings: {item.good}. Unstable: {item.unstable}. Missing or unusable:{' '}
+                      {item.missing}.
+                    </p>
                   </details>
                 </article>
               )
@@ -124,12 +138,7 @@ export function PersonalizedHealthSummary() {
         </>
       ) : null}
       <div className="health-summary-disclaimer">
-        <Badge tone="muted">Decision support</Badge>
-        <p>
-          This summary supports caregiver awareness. It is not a medical diagnosis and does not
-          replace professional medical advice. Personalized changes are distinct from fixed-rule
-          health alerts.
-        </p>
+        <p>Personalized changes are distinct from fixed-rule health alerts.</p>
       </div>
     </section>
   )

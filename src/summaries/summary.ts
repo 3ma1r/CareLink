@@ -1,5 +1,5 @@
 import type { Metric } from '../data/demo'
-import { metrics, stamp, validValue } from '../data/demo'
+import { formatValue, metrics, stamp, validValue } from '../data/demo'
 import type {
   PersonalizedBaseline,
   PersonalizedInsight,
@@ -169,7 +169,7 @@ export function createHealthSummary(source: SummarySource, period: SummaryPeriod
         `${label} is still learning its personal baseline; more good-quality readings are needed.`,
       )
     } else {
-      const value = baseline.baseline_median.toFixed(metrics[metric].decimals)
+      const value = formatValue(baseline.baseline_median, metric)
       parts.push(`${label}'s established personal baseline is ${value} ${metrics[metric].unit}.`)
     }
     if (accepted.length === 0)

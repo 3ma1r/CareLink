@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapStoredAlert } from './alerts'
+import { alertValue, mapStoredAlert } from './alerts'
 import type { StoredAlert } from '../device/DeviceProvider'
 
 const stored: StoredAlert = {
@@ -31,6 +31,33 @@ const stored: StoredAlert = {
 }
 
 describe('stored alert mapping', () => {
+  it.each([
+    ['temperature_low', 'lt', 22.69, 35, 'Low temperature', '22.7 °C', 'Below 35.0 °C'],
+    ['temperature_high', 'gt', 41.97, 38, 'High temperature', '42.0 °C', 'Above 38.0 °C'],
+  ])(
+    'rebuilds malformed %s prose from unchanged numeric evidence',
+    (rule, comparison, value, threshold, title, display, limit) => {
+      const row = {
+        ...stored,
+        metric: 'temperature' as const,
+        rule_id: String(rule),
+        observed_value: Number(value),
+        unit: 'Ã‚Â°C',
+        title: 'Sensor temperature',
+        message: 'prototype threshold 22.69Ã‚Â°C',
+        threshold_metadata: { comparison, threshold },
+      }
+      const alert = mapStoredAlert(row)
+      expect(alert.title).toBe(title)
+      expect(alertValue(alert)).toBe(display)
+      expect(alert.thresholdText).toBe(limit)
+      expect(alert.description).toMatch(/CareLink alert range/)
+      expect(alert.description).not.toMatch(/prototype|Ã|Â/)
+      expect(alert.observedValue).toBe(value)
+      expect(alert.time).toBe(Date.parse(stored.measurement_at))
+      expect(row.unit).toBe('Ã‚Â°C')
+    },
+  )
   it('preserves lifecycle, severity and explainability fields', () => {
     expect(mapStoredAlert(stored)).toMatchObject({
       status: 'Active',

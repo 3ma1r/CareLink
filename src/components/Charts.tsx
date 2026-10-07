@@ -135,6 +135,7 @@ export function HealthChart({
                 axisLine={false}
                 tick={{ fill: 'var(--muted)', fontSize: 11 }}
                 tickCount={4}
+                tickFormatter={(value: number) => formatValue(value, metric)}
               />
               <Tooltip
                 content={<ChartTooltip metric={metric} sampleMode={sampleMode} />}

@@ -166,10 +166,37 @@ export function Segments<T extends string>({
 }
 export function DeviceCard({ compact = false }: { compact?: boolean }) {
   const { device, connection, loading, error, refresh } = useDevice()
-  if (error) return <section className={`device-card ${compact ? 'compact' : ''}`} role="status"><span className="device-status-icon"><WifiOff size={22}/></span><div><strong>Wearable data unavailable</strong><p>{error}</p><button type="button" className="text-link" onClick={() => void refresh()}>Try again</button></div></section>
+  if (error)
+    return (
+      <section className={`device-card ${compact ? 'compact' : ''}`} role="status">
+        <span className="device-status-icon">
+          <WifiOff size={22} />
+        </span>
+        <div>
+          <strong>Wearable data unavailable</strong>
+          <p>{error}</p>
+          <button type="button" className="text-link" onClick={() => void refresh()}>
+            Try again
+          </button>
+        </div>
+      </section>
+    )
   const offline = connection === 'offline'
-  const status = loading ? 'Checking wearable…' : connection === 'none' ? 'No wearable paired' : connection === 'awaiting' ? 'Paired — awaiting first connection' : offline ? 'Wearable offline' : 'Wearable online'
-  const when = device?.last_contact_at ? new Date(device.last_contact_at).toLocaleString([], { dateStyle:'medium', timeStyle:'short' }) : 'No contact yet'
+  const status = loading
+    ? 'Checking wearable…'
+    : connection === 'none'
+      ? 'No wearable paired'
+      : connection === 'awaiting'
+        ? 'Paired — awaiting first connection'
+        : offline
+          ? 'Wearable offline'
+          : 'Wearable online'
+  const when = device?.last_contact_at
+    ? new Date(device.last_contact_at).toLocaleString([], {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : 'No contact yet'
   return (
     <Link
       to={device ? '/profile#device' : '/pair-device'}
@@ -182,7 +209,9 @@ export function DeviceCard({ compact = false }: { compact?: boolean }) {
         <strong>{status}</strong>
         <p>Last contact · {when}</p>
         <small>
-          {device ? `${device.display_name ?? device.device_model} · Real pairing status` : 'Pairing required · Monitoring is not active'}
+          {device
+            ? `${device.display_name ?? device.device_model} · Real pairing status`
+            : 'Pairing required · Monitoring is not active'}
         </small>
       </div>
       {!compact && (
@@ -228,7 +257,12 @@ export function EmptyState({
         <Activity size={27} />
       </span>
       <h3>{title}</h3>
-      <p>{detail ?? (sampleMode ? 'Choose another date or change the demo scenario to explore sample readings.' : 'No wearable measurements were recorded in the selected period.')}</p>
+      <p>
+        {detail ??
+          (sampleMode
+            ? 'Choose another date or change the demo scenario to explore sample readings.'
+            : 'No wearable measurements were recorded in the selected period.')}
+      </p>
     </div>
   )
 }
@@ -288,7 +322,11 @@ export function LocationSummary() {
         <MapPin size={22} />
       </span>
       <div>
-        <strong>{location.coordinates ? `${sampleMode ? 'Sample' : 'Last known'} location · ${patient.city}, Oman` : 'Location unavailable'}</strong>
+        <strong>
+          {location.coordinates
+            ? `${sampleMode ? 'Sample' : 'Last known'} location · ${patient.city}, Oman`
+            : 'Location unavailable'}
+        </strong>
         <p>
           {location.time ? `Last GPS fix · ${stamp(location.time)}` : 'Waiting for a valid GPS fix'}
         </p>
@@ -298,11 +336,12 @@ export function LocationSummary() {
   )
 }
 export function PrototypeNote() {
-  const { sampleMode } = useCare()
   return (
     <div className="prototype-note">
       <Watch size={16} />
-      <span>Monitoring prototype · {sampleMode ? 'Sample data only' : 'Wearable sensor data'} · Not a medical device</span>
+      <span>
+        CareLink supports caregiver awareness and does not replace professional medical advice.
+      </span>
     </div>
   )
 }

@@ -1,7 +1,12 @@
 import { defineConfig } from 'vite'
+import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+const unusedJspdfOptionalModule = fileURLToPath(
+  new URL('./src/reports/jspdf-optional.ts', import.meta.url),
+)
 
 export default defineConfig({
   plugins: [
@@ -15,7 +20,7 @@ export default defineConfig({
       manifest: {
         name: 'CareLink — Care, connected.',
         short_name: 'CareLink',
-        description: 'Caregiver monitoring prototype · Demo sample data',
+        description: 'CareLink brings patient wearable updates to caregivers.',
         theme_color: '#061822',
         background_color: '#061822',
         display: 'standalone',
@@ -39,8 +44,25 @@ export default defineConfig({
       },
     }),
   ],
+  resolve: {
+    // CareLink builds reports with jsPDF's text/vector APIs only. Keep its unused
+    // HTML/SVG converters resolvable without shipping their optional dependencies.
+    alias: {
+      canvg: unusedJspdfOptionalModule,
+      html2canvas: unusedJspdfOptionalModule,
+      dompurify: unusedJspdfOptionalModule,
+    },
+  },
   build: {
-    rollupOptions: { output: { manualChunks: { charts: ['recharts'], maps: ['leaflet'], supabase: ['@supabase/supabase-js'] } } },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          charts: ['recharts'],
+          maps: ['leaflet'],
+          supabase: ['@supabase/supabase-js'],
+        },
+      },
+    },
   },
   server: { port: 3000 },
 })

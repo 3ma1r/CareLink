@@ -1,9 +1,11 @@
+import { formatTemperature } from './format'
 export type Metric = 'heartRate' | 'spo2' | 'temperature'
 export type Quality = 'Good' | 'Unstable' | 'Missing'
 export type Scenario =
   'typical' | 'offline' | 'unstable' | 'staleGps' | 'noGps' | 'sos' | 'fall' | 'empty'
 export type AlertStatus = 'Active' | 'Acknowledged' | 'Resolved'
-export type AIState = 'awaiting' | 'learning' | 'usual' | 'unusual' | 'resolved' | 'insufficient' | 'unavailable'
+export type AIState =
+  'awaiting' | 'learning' | 'usual' | 'unusual' | 'resolved' | 'insufficient' | 'unavailable'
 export interface Reading {
   id: string
   time: number
@@ -36,6 +38,7 @@ export interface CareAlert {
   metric?: 'heart_rate' | 'spo2' | 'temperature' | 'fall'
   ruleId?: string
   ruleVersion?: number
+  thresholdText?: string
   deviceId?: string
   acknowledgedAt?: number | null
   resolvedAt?: number | null
@@ -63,7 +66,7 @@ export const metrics = {
   },
   spo2: { label: 'SpO₂', unit: '%', color: 'var(--blue)', decimals: 0, domain: [88, 100] },
   temperature: {
-    label: 'Sensor temperature',
+    label: 'Temperature',
     unit: '°C',
     color: 'var(--amber)',
     decimals: 1,
@@ -106,7 +109,8 @@ export function stamp(time: number | null, seconds = false) {
   return time === null ? 'Unavailable' : `${dateLabel(time)} · ${timeLabel(time, seconds)} GST`
 }
 export function formatValue(value: number | null, metric: Metric) {
-  return value === null ? '—' : value.toFixed(metrics[metric].decimals)
+  if (metric === 'temperature') return formatTemperature(value, false)
+  return value === null || !Number.isFinite(value) ? '—' : value.toFixed(metrics[metric].decimals)
 }
 export function validValue(reading: Reading, metric: Metric): number | null {
   const value = reading[metric]

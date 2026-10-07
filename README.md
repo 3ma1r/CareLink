@@ -1,5 +1,37 @@
 # CareLink · Personalized Insights
 
+## Final caregiver interface (Prompt 2)
+
+Dashboard now has one **Personalized Insights** section. Heart rate, SpO₂ and Temperature retain independent Learning / Baseline ready / Change detected states. Active changes stay visible; baseline counts and evidence are behind **View details**. **View health summary** expands the unchanged Part 2 calculation inside this section, collapsed on Dashboard entry. The mounted disclosure preserves its 24-hour/7-day selection without fetching on open/close. The existing provider still owns refresh and stale-data handling.
+
+Profile follows the hybrid reference while preserving the existing top and mobile navigation: an unboxed caregiver header, one Personal & patient information form, a Settings panel, a separate Wearable card and a simple Account panel. All fields, validation, read-only email, save, theme preference, notification actions, introduction replay and secure logout are retained. Device details are disclosed deliberately and the device identifier stays masked. There are no decorative privacy controls. The latest raw-packet/developer card is removed from caregiver UI.
+
+Caregiver pages, authentication copy and install metadata no longer advertise prototype stages, versions, providers or outdated notification limitations. Authentication behavior is unchanged. One shared short medical-safety statement remains in the application footer. Technical documentation retains architecture and implementation details.
+
+### Temperature presentation
+
+Historical alert prose and unit fields were displayed verbatim, allowing already misencoded units such as `Ã‚Â°C` and unrounded raw values to reach Alerts and History. `src/alerts/alerts.ts` now derives the title, explanation, value and threshold from structured metric, comparison, threshold and numeric evidence. Canonical units come from the metric, never stored prose. `src/data/format.ts` centralizes one-decimal temperature display; charts, summaries and reports use the same formatting path. Null and nonfinite values remain unavailable. Stored measurements, historical prose, lifecycle timestamps and alert thresholds are not rewritten. No backend correction is required for presentation.
+
+### Local PDF reports
+
+**Download PDF Report** uses History's selected period, immediately shows **Preparing report…**, then downloads `CareLink-Health-Report-YYYY-MM-DD.pdf` (Muscat date). A failure restores the control and gives a nontechnical retry message. There is no blocking report modal.
+
+The browser dynamically loads pinned `jspdf@4.2.1` and creates the PDF locally. The font is a TTF conversion of the existing licensed DM Sans Latin font; its SIL license is included. jsPDF's unused HTML/SVG conversion dependencies are excluded from bundling. No external PDF service, CDN script, health telemetry or AI service is used.
+
+`src/reports/source.ts` uses the existing authenticated client and RLS, scopes records to the current patient/device, and paginates the chosen period instead of exporting the capped chart subset. It reads at least seven days for the unchanged seven-day health summary, separately labelled in the report. The report includes patient name, reporting/generation times, vitals, quality counts, twelve recent readings, relevant/open health alerts with status, personalized changes, a seven-day summary and a short safety note. Baselines and open statuses reflect the latest available analysis, even when the selected reading period is historical. Requests at 50,000 measurement or 10,000 event rows fail rather than silently export partial data; choose a shorter period. Account/device changes or page exit cancel delivery. Test builds create visibly labelled test reports using only the existing device test adapter; production never falls back to demo data.
+
+Only explicit caregiver-facing fields are written: no credentials, pairing codes, tokens, database IDs, raw records, scores or debug information. The PDF is private health information once downloaded. It includes the configured Latin-script font; names requiring other scripts need a future matching font extension.
+
+Desktop and Android use normal browser download. On iPhone/iPad, a window is reserved during the click and navigated to the locally generated PDF so Safari/PWA can provide preview and Share/Save to Files. If popups are blocked the normal download link remains the fallback. Physical iOS/PWA behavior still needs manual verification; desktop emulation cannot prove the native share experience.
+
+### Verification and remaining work
+
+Run `npm run typecheck`, `npm run lint`, `npm run test`, `npx playwright test`, `npm run build`, `npm audit`, and `git diff --check`. `tests/polish.spec.ts` checks Profile and expanded Insights in both themes at 320×568, 375×667, 390×844, 430×932, 844×390, 768×1024 and 1440×900, plus 200% CSS zoom, focusable disclosures, reduced motion and axe checks. Existing entry/auth/device/push/offline tests remain. PDF tests verify signature, size, content allowlisting, missing data, units and iOS detection; ignored `qa/pdf` contains synthetic rendered-report fixtures for inspection. No private patient data is stored as test artifacts.
+
+The dependency audit reports four pre-existing transitive findings: high `brace-expansion` (ESLint/TypeScript-ESLint/Workbox tooling), moderate `fast-uri` (Workbox/ajv), low `serialize-javascript` (Workbox/terser), and high `source-map-js` (Tailwind/PostCSS build tools). The last is marked production by npm because Tailwind's Vite plugin is declared in dependencies, but is build tooling. No unrelated upgrades or forced audit fixes were performed. Review these separately before release.
+
+Local Docker is unavailable, so database fixtures cannot be claimed as rerun for Prompt 2. No schema, RLS, backend, ingestion, push worker, service-worker handler, firmware, analysis rules or approved entry behavior changed. Physical fall upload, clinical validation, native phone PDF sharing and real-device notification delivery remain manual/deferred work. See `PROJECT_CONTEXT.md` for the current handoff and manual checklist.
+
 CareLink is a responsive React, TypeScript, Vite and Supabase caregiver PWA. AI Part 1 provides explainable, quality-aware personalized anomaly detection; AI Part 2 now turns verified facts into deterministic caregiver summaries. Authentication, patient ownership, secure device pairing, deterministic safety alerts, Web Push, RLS, idempotent ingestion, offline PWA behavior, themes and the existing wearable flow remain independent.
 
 ## Stage 5A alert architecture
@@ -72,18 +104,18 @@ Personalized Insights are deterministic statistical decision support. They do no
 
 The active configuration is stored as `carelink_personalized_mad_v1`. Each metric learns independently from the patient's own event timestamps in UTC:
 
-| Constant | Version 1 value |
-| --- | --- |
-| Rolling baseline window | 14 days |
-| Baseline exclusion immediately before evaluation | 15 minutes |
-| Minimum baseline evidence | 30 good readings |
-| Minimum observation spread | 3 distinct UTC days and 48 hours of coverage |
-| Recent evaluation window | 15 minutes |
-| Recent evidence | Latest 3–5 good readings |
-| Unusual robust-score threshold | 3.5 |
-| Minimum directional consistency | 75% |
-| Resolution evidence | 3 later close readings within 30 minutes |
-| Resolution robust-score threshold | 1.5 |
+| Constant                                         | Version 1 value                              |
+| ------------------------------------------------ | -------------------------------------------- |
+| Rolling baseline window                          | 14 days                                      |
+| Baseline exclusion immediately before evaluation | 15 minutes                                   |
+| Minimum baseline evidence                        | 30 good readings                             |
+| Minimum observation spread                       | 3 distinct UTC days and 48 hours of coverage |
+| Recent evaluation window                         | 15 minutes                                   |
+| Recent evidence                                  | Latest 3–5 good readings                     |
+| Unusual robust-score threshold                   | 3.5                                          |
+| Minimum directional consistency                  | 75%                                          |
+| Resolution evidence                              | 3 later close readings within 30 minutes     |
+| Resolution robust-score threshold                | 1.5                                          |
 
 Only finite, non-null, good-quality values inside the versioned sensor-valid ranges are candidates: heart rate 30–220 bpm, SpO₂ 70–100%, and sensor temperature 25–45°C. A historical row whose independent quality field is null uses the legacy row-level quality; current rows use the independent per-metric field. Missing, unstable and out-of-range values are never changed to zero. GPS and upload time do not participate.
 
@@ -246,6 +278,6 @@ Use this physical end-to-end checklist after provisioning:
 
 ## Later stages
 
-Future work may include caregiver-reviewed export/reporting and physical-device validation. Physical confirmed-fall upload remains a separate, explicitly authorized firmware stage. AI-generated push notifications, disease prediction, treatment recommendations and silent threshold changes are not part of this implementation.
+Future work includes physical-device validation and broader PDF font coverage. Local caregiver PDF export is implemented above. Physical confirmed-fall upload remains a separate, explicitly authorized firmware stage. AI-generated push notifications, disease prediction, treatment recommendations and silent threshold changes are not part of this implementation.
 
 All thresholds and alerts are prototype monitoring aids. They are not medically validated diagnostic criteria and do not establish a diagnosis.

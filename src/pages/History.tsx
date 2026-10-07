@@ -1,7 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Download, FileText, Footprints, Heart, Info } from 'lucide-react'
+import { ArrowLeft, Download, Footprints, Heart, Info } from 'lucide-react'
 import { useCare } from '../state'
+import { useAuth } from '../auth/AuthProvider'
+import { useDevice } from '../device/DeviceProvider'
+import { alertValue } from '../alerts/alerts'
+import { isIosPdfPreview, deliverReport } from '../reports/download'
 import {
   DAY,
   dateKey,
@@ -16,15 +20,7 @@ import {
   validValue,
 } from '../data/demo'
 import type { Metric } from '../data/demo'
-import {
-  Badge,
-  EmptyState,
-  Modal,
-  PageHeading,
-  SectionTitle,
-  Segments,
-  Stats,
-} from '../components/UI'
+import { Badge, EmptyState, PageHeading, SectionTitle, Segments, Stats } from '../components/UI'
 import { HealthChart, MovementChart } from '../components/Charts'
 type Period = 'today' | 'week' | 'month' | 'custom'
 export default function History() {
@@ -44,7 +40,17 @@ export default function History() {
   const [startDate, setStartDate] = useState(initialDay)
   const [endDate, setEndDate] = useState(initialDay)
   const [range, setRange] = useState('24H')
-  const [report, setReport] = useState(false)
+  const [reportBusy, setReportBusy] = useState(false)
+  const [reportError, setReportError] = useState('')
+  const auth = useAuth()
+  const device = useDevice()
+  const reportOwner = useRef('')
+  useEffect(() => {
+    reportOwner.current = `${auth.user?.id}:${auth.patient?.id}:${device.device?.id}`
+    return () => {
+      reportOwner.current = ''
+    }
+  }, [auth.user?.id, auth.patient?.id, device.device?.id])
   const [all, setAll] = useState(false)
   const invalidDates = period === 'custom' && (!startDate || !endDate || startDate > endDate)
   const start =
@@ -70,6 +76,75 @@ export default function History() {
     setPeriod(value)
     setAll(false)
   }
+  async function downloadReport() {
+    if (reportBusy || !auth.user || !auth.patient || auth.status !== 'signed-in') return
+    const owner = reportOwner.current
+    const patientId = auth.patient.id
+    const deviceId = device.device?.id ?? null
+    if (
+      auth.patient.caregiver_id !== auth.user.id ||
+      (device.device && device.device.paired_patient_id !== patientId)
+    )
+      return
+    setReportBusy(true)
+    setReportError('')
+    const ios = isIosPdfPreview(navigator)
+    const preview = ios ? window.open('', '_blank') : null
+    if (preview) {
+      preview.opener = null
+      preview.document.title = 'Preparing CareLink report'
+      preview.document.body.textContent = 'Preparing report…'
+    }
+    try {
+      const [{ generateReport, reportFilename }, { loadReportSource }] = await Promise.all([
+        import('../reports/report'),
+        import('../reports/source'),
+      ])
+      const generatedAt = Date.now()
+      const source =
+        import.meta.env.MODE === 'test'
+          ? {
+              patientId,
+              deviceId,
+              measurements: device.measurements,
+              alerts: device.alerts,
+              baselines: device.personalizedBaselines,
+              insights: device.personalizedInsights,
+              asOf: end,
+              updatedAt: generatedAt,
+            }
+          : await loadReportSource(patientId, deviceId, start, end)
+      const fontResponse = await fetch('/assets/report-font.ttf')
+      if (!fontResponse.ok) throw new Error('Report font unavailable')
+      const bytes = new Uint8Array(await fontResponse.arrayBuffer())
+      let binary = ''
+      for (const byte of bytes) binary += String.fromCharCode(byte)
+      const buffer = generateReport(
+        {
+          patientName: auth.patient.full_name,
+          source,
+          start,
+          end,
+          generatedAt,
+          testOnly: import.meta.env.MODE === 'test',
+        },
+        btoa(binary),
+      )
+      if (!owner || reportOwner.current !== owner) {
+        preview?.close()
+        return
+      }
+      deliverReport(buffer, reportFilename(generatedAt), preview)
+    } catch {
+      preview?.close()
+      if (reportOwner.current === owner)
+        setReportError(
+          'Your report could not be prepared. Check your connection or choose a shorter period, then try again.',
+        )
+    } finally {
+      setReportBusy(false)
+    }
+  }
   return (
     <>
       <Link to="/" className="back-link">
@@ -82,14 +157,22 @@ export default function History() {
         action={
           <button
             className="button primary"
-            disabled={invalidDates}
-            onClick={() => setReport(true)}
+            disabled={invalidDates || reportBusy || device.loading}
+            onClick={() => void downloadReport()}
           >
             <Download size={18} />
-            Download PDF Report
+            {reportBusy ? 'Preparing report…' : 'Download PDF Report'}
           </button>
         }
       />
+      {reportError && (
+        <p className="form-error" role="alert">
+          {reportError}
+        </p>
+      )}
+      <span role="status" className="sr-only">
+        {reportBusy ? 'Preparing report…' : ''}
+      </span>
       <section className="history-filters card">
         <Segments
           label="Health metric"
@@ -199,8 +282,7 @@ export default function History() {
             </p>
             {metric === 'temperature' && (
               <p className="inline-notice">
-                Sensor temperature is a wearable sensor reading, not validated core body
-                temperature.
+                Temperature is a wearable reading, not validated core body temperature.
               </p>
             )}
           </section>
@@ -232,7 +314,7 @@ export default function History() {
                     <strong>{a.title}</strong>
                     <small>
                       Measured {stamp(a.time)}
-                      {a.observedValue != null ? ` · ${a.observedValue} ${a.unit}` : ''}
+                      {a.observedValue != null ? ` · ${alertValue(a)}` : ''}
                     </small>
                   </div>
                   <Badge
@@ -294,52 +376,6 @@ export default function History() {
           )}
         </section>
       </div>
-      <Modal
-        open={report}
-        onClose={() => setReport(false)}
-        title="Health report preview"
-        className="report-modal"
-      >
-        <div className="report-cover">
-          <span className="icon-tile">
-            <FileText size={30} />
-          </span>
-          <Badge>{sampleMode ? 'Demo — sample report' : 'Wearable report preview'}</Badge>
-          <h3>{patient.name}’s health summary</h3>
-          <p>
-            {patient.age} years · Sample location: {patient.city}, Oman
-          </p>
-          <strong>{periodLabel}</strong>
-        </div>
-        <div className="report-content">
-          <h3>{metrics[metric].label}</h3>
-          <Stats readings={selected} metric={metric} />
-          <div className="report-facts">
-            <span>
-              Calculated readings<strong>{stats.count}</strong>
-            </span>
-            <span>
-              {sampleMode ? 'Sample events' : 'Alert events'}
-              <strong>{selectedAlerts.length}</strong>
-            </span>
-            <span>
-              Time zone<strong>Muscat · GST</strong>
-            </span>
-          </div>
-          <p className="inline-notice">
-            <Info size={18} />
-            PDF export will be added in the reporting stage. This is a preview; no file has been
-            downloaded.
-          </p>
-          <p className="data-note">
-            {sampleMode ? 'Sample data only. ' : ''}Missing readings are excluded. This monitoring
-            prototype does not provide a medical assessment.
-          </p>
-          <button className="button primary full" onClick={() => setReport(false)}>
-            Done
-          </button>
-        </div>
-      </Modal>
     </>
   )
 }
