@@ -65,6 +65,7 @@ function useStore() {
         },
       }
   const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme
+  const systemTheme = systemDark ? 'dark' : 'light'
   useEffect(() => {
     const query = matchMedia('(prefers-color-scheme: dark)')
     const change = () => setSystemDark(query.matches)
@@ -104,11 +105,16 @@ function useStore() {
     theme,
     setTheme,
     resolvedTheme,
+    systemTheme,
     online,
     sampleMode,
     dataNow: sampleMode ? Date.parse('2026-09-14T12:00:00+04:00') : Date.now(),
     alertsLoading: sampleMode ? false : wearable.alertsLoading,
     alertError: sampleMode ? '' : wearable.alertError,
+    personalizedBaselines: sampleMode ? [] : wearable.personalizedBaselines,
+    personalizedInsights: sampleMode ? [] : wearable.personalizedInsights,
+    insightsLoading: sampleMode ? false : wearable.insightsLoading,
+    insightError: sampleMode ? '' : wearable.insightError,
     updateAlert: async (id: string, status: AlertStatus) => {
       if (sampleMode) {
         setStatuses((current) => ({ ...current, [id]: status }))

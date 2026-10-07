@@ -1,6 +1,6 @@
-# CareLink · Stage 5B
+# CareLink · Personalized Insights
 
-CareLink is a responsive React, TypeScript, Vite and Supabase caregiver PWA. Stage 5B adds caregiver-controlled Web Push delivery for new Stage 5A alerts while preserving authentication, patient ownership, secure device pairing, deterministic analysis, RLS, idempotent ingestion, offline PWA behavior, themes and the existing wearable flow.
+CareLink is a responsive React, TypeScript, Vite and Supabase caregiver PWA. AI Part 1 provides explainable, quality-aware personalized anomaly detection; AI Part 2 now turns verified facts into deterministic caregiver summaries. Authentication, patient ownership, secure device pairing, deterministic safety alerts, Web Push, RLS, idempotent ingestion, offline PWA behavior, themes and the existing wearable flow remain independent.
 
 ## Stage 5A alert architecture
 
@@ -41,7 +41,7 @@ The scheduled `push-worker` atomically claims due rows with `FOR UPDATE SKIP LOC
 
 ### Push configuration
 
-No production web origin is present in this repository. The deployed caregiver Function therefore currently accepts the existing exact `http://localhost:3000` origin through `ALLOWED_ORIGIN`; it never uses a wildcard. Before production use, set `ALLOWED_ORIGINS` to a comma-separated list containing localhost and the exact deployed HTTPS origin. Do not add a guessed preview or production URL.
+The permanent production origin is `https://carelinkk.netlify.app`. The deployed caregiver Function accepts that origin and `http://localhost:3000` through the exact `ALLOWED_ORIGINS` list; it never uses a wildcard. The VAPID pair, worker secret and matching Vault values are configured in the dedicated CareLink project without placing private values in the repository.
 
 Required browser and Edge Function configuration names are listed with blank values in `.env.example` and `supabase/functions/.env.example`:
 
@@ -57,18 +57,77 @@ Android installed PWAs and compatible desktop browsers support this flow when se
 
 The Vite development server does not install the production service worker. For localhost push testing, configure the public key, run `npm run build`, then serve the production output on the already allowed origin with `npm run preview -- --port 3000`. Offline caching and notification handling should be verified from that preview. A real mobile device cannot use another computer's `localhost`; use the final HTTPS deployment for physical Android and iPhone tests.
 
-Manual mobile verification after the missing configuration is supplied:
+Safe mobile regression check for the configured production deployment:
 
-1. Deploy the frontend over HTTPS with the public VAPID key and add its exact origin to `ALLOWED_ORIGINS`.
-2. Add the worker URL and internal worker secret to Vault, and set the matching Edge secrets plus the VAPID pair and subject.
-3. On Android, install/open the PWA, sign in, open Profile and press **Enable notifications**; accept the browser prompt.
-4. On iPhone/iPad 16.4+, use Share → **Add to Home Screen**, launch that installed icon, sign in, open Profile and press **Enable notifications**.
-5. Confirm Profile reports enabled, close or background the PWA, and create one controlled new Stage 5A alert through the existing authenticated ingestion test path.
-6. Confirm exactly one generic system notification arrives on each enabled device, opens `/alerts`, and reveals details only after authentication.
-7. Acknowledge and resolve the alert and confirm neither action creates another system notification.
-8. Disable notifications and confirm the browser no longer receives later alerts. Sign out and verify protected alert data cannot be opened from the notification route.
+1. On Android, install/open the PWA, sign in, open Profile and press **Enable notifications**; accept the browser prompt.
+2. On iPhone/iPad 16.4+, use Share → **Add to Home Screen**, launch that installed icon, sign in, open Profile and press **Enable notifications**.
+3. Confirm Profile reports enabled, close or background the PWA, and create one controlled new Stage 5A alert through the existing authenticated ingestion test path.
+4. Confirm exactly one generic system notification arrives on each enabled device, opens `/alerts`, and reveals details only after authentication.
+5. Acknowledge and resolve the alert and confirm neither action creates another system notification.
+6. Disable notifications and confirm the browser no longer receives later alerts. Sign out and verify protected alert data cannot be opened from the notification route.
+
+## AI Part 1 personalized-analysis architecture
+
+Personalized Insights are deterministic statistical decision support. They do not call an LLM or external AI service, do not send health data outside the dedicated Supabase project, and do not predict a disease, fall, hospitalization or treatment. The fixed Stage 5A rules remain the authoritative safety path and continue to work when no personal baseline exists. An insight never creates, acknowledges, resolves, delays or suppresses a health alert and never creates a push-delivery row.
+
+The active configuration is stored as `carelink_personalized_mad_v1`. Each metric learns independently from the patient's own event timestamps in UTC:
+
+| Constant | Version 1 value |
+| --- | --- |
+| Rolling baseline window | 14 days |
+| Baseline exclusion immediately before evaluation | 15 minutes |
+| Minimum baseline evidence | 30 good readings |
+| Minimum observation spread | 3 distinct UTC days and 48 hours of coverage |
+| Recent evaluation window | 15 minutes |
+| Recent evidence | Latest 3–5 good readings |
+| Unusual robust-score threshold | 3.5 |
+| Minimum directional consistency | 75% |
+| Resolution evidence | 3 later close readings within 30 minutes |
+| Resolution robust-score threshold | 1.5 |
+
+Only finite, non-null, good-quality values inside the versioned sensor-valid ranges are candidates: heart rate 30–220 bpm, SpO₂ 70–100%, and sensor temperature 25–45°C. A historical row whose independent quality field is null uses the legacy row-level quality; current rows use the independent per-metric field. Missing, unstable and out-of-range values are never changed to zero. GPS and upload time do not participate.
+
+For candidate values `x`, the baseline center is `median(x)`. Dispersion is `MAD = median(abs(x - median(x)))`, and the robust scale is `max(1.4826 × MAD, noise floor)`. Noise floors are 2 bpm for heart rate, 1 percentage point for SpO₂, and 0.2°C for temperature. A zero-MAD baseline therefore remains safe and finite. The recent score is `abs(recent median - baseline median) / robust scale`.
+
+Statistical distance alone is insufficient. Version 1 also requires an absolute change of at least 10 bpm, 3 SpO₂ percentage points, or 0.5°C and directionally consistent repeated evidence. This prevents tiny low-noise fluctuations from being labelled unusual. A single outlier cannot move either median enough to trigger the sustained-change rule. Confidence is `low`, `moderate` or `high` based on baseline volume, day coverage, recent sample count and directional consistency; it is not a probability of illness.
+
+The current 15-minute evaluation window is excluded from its own baseline, preventing leakage. Measurements during deterministic-alert periods and personalized-anomaly periods are excluded from later training, so a continuing abnormal condition cannot immediately redefine itself as usual. The rolling median/MAD changes only as good historical candidates enter or leave the bounded 14-day window. Chronological, idempotent processing plus fixed versioned constants makes those gradual updates reproducible.
+
+`public.personalized_baselines` exposes per-metric learning progress and the latest evaluation state. `public.personalized_insights` stores active/resolved lifecycle records with direction, evaluation window, sample counts, medians, deviation, score, confidence, version, first/last source IDs and occurrence count. The private evaluation audit has one unique `(measurement, metric, version)` row. A partial unique index permits only one active insight per device, metric and version. Repeated evidence updates that row; three later good readings close to baseline resolve it. Missing or unstable readings can neither create nor resolve an insight.
+
+Historical good measurements are used once to calculate readiness at deployment, but deployment creates no historical evaluations or insights. Only measurements inserted after the version activation timestamp are eligible for new evaluations. The current implementation-time aggregate inspection found 202 measurements over seven UTC days at an approximately 57-second median interval. Explicit independent quality had 6 good HR, 33 good SpO₂ and 79 good temperature values; the safe legacy fallback found 9, 36 and 82 valid good values across six, six and seven days before leakage and alert-period exclusions. The deployed baseline snapshot retains 8 HR values across five days, 35 SpO₂ values across five days, and 14 temperature values across three days. SpO₂ is ready; HR and temperature remain `learning`. Temperature loses most candidates because an acknowledged deterministic temperature-alert period is deliberately excluded. These counts describe sensor-data readiness, not medically normal health.
+
+Analysis runs server-side once per minute through a direct Supabase Cron database-function call. It performs no network request and adds no Edge Function, Vault value or secret. A bounded run handles at most 100 pending measurements in chronological event-time order. An advisory transaction lock prevents overlapping workers, unique constraints make reruns safe, and each measurement is retried if analysis fails. Because the analyzer is scheduled separately and no measurement trigger was added, analysis failure cannot reject or delay a valid ESP32 ingestion. Expected insight latency is up to about one minute plus database execution time.
+
+The analysis functions live in `private`, use `SECURITY DEFINER` only for the scheduled trusted calculation, pin `search_path` to empty, schema-qualify referenced objects, and revoke execution from `PUBLIC`, `anon`, `authenticated` and `service_role`. The two exposed tables have forced RLS and grant authenticated caregivers read-only access only through ownership of the linked patient. Browser users cannot insert or alter baselines, scores or insight lifecycle. Anonymous and cross-caregiver reads are denied. This follows the current Supabase guidance for [database-function security](https://supabase.com/docs/guides/database/functions), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) and [direct database Cron jobs](https://supabase.com/docs/guides/cron/quickstart).
+
+Dashboard presents `learning`, `usual`, `unusual` and `insufficient_recent_data` separately for each metric. Technical medians, MAD, robust scores and algorithm version stay behind accessible disclosure controls. The main message uses plain language, explicitly distinguishes personalized insights from fixed safety alerts, and states that these observed patterns are not medically validated ranges and do not replace professional medical advice. Production never substitutes sample insights; synthetic presentation states exist only in the test build.
+
+Safe manual verification uses future real readings only: open Dashboard and confirm each metric's stored progress; wait for three good post-deployment readings within 15 minutes; verify that ordinary variation remains usual; and review any naturally created insight against the underlying History rows without manufacturing data in the real patient's record. A resolved insight can reflect three later good readings close to baseline **or** an opposite-direction unusual change; the summary only calls it a return when the latest stored usual evaluation matches the resolution. Do not alter sensor values or fixed alert thresholds to force a production result.
+
+Limitations: the real dataset is small, HR has too few good samples, readings are unevenly distributed, sensor temperature is a wearable sensor measurement rather than a clinical core-temperature measurement, and the constants are prototype engineering settings rather than clinically validated criteria. Neither AI Part 1 nor Part 2 changes the fixed alert rules. Physical confirmed-fall upload remains deferred until the enclosure and separately authorized firmware work are complete.
+
+## AI Part 2 deterministic caregiver summaries
+
+The Dashboard's **Personalized Health Summary** presents rolling previous 24-hour and 7-day windows. `src/summaries/summary.ts` is the versioned, pure TypeScript rule source (`carelink_summary_v1`). It combines the caregiver-owned wearable readings, Part 1 baseline readiness and latest evaluations, active and resolved personalized insights, and independently stored fixed-rule health alerts. It does not run or alter Part 1, modify alerts, or send push notifications. All window comparisons use UTC; displayed timestamps use the existing Muscat/GST formatter.
+
+The normal 30-day chart query is capped and cannot prove seven-day coverage. A separate, paged seven-day measurement query fetches the complete window; active and in-window resolved alert/insight records are fetched separately, with a fail-closed 1,000-record bound per event category. A measurement window over 10,000 rows or an event category at the bound produces a summary error instead of a partial conclusion. The browser calculates only from a coherent successful refresh and filters records again by the selected patient and device. The one-minute visible/online refresh updates it automatically. A failed refresh or offline state retains the prior in-session summary only with an explicit stale indicator and last-successful-update time. A new account or device does not reuse a previous patient's summary. Test-mode samples are never substituted into a production summary.
+
+Each metric counts finite, accepted, **good-quality** readings independently. The accepted-value filters mirror the versioned Part 1 metric config (heart rate 30–220 bpm, SpO₂ 70–100%, sensor temperature 25–45 °C); a unit test checks them against the SQL migration. Unstable values stay visible elsewhere but cannot determine the summary trend. Missing or unusable quality is a coverage notice, not a medical warning. A descriptive trend needs at least three good readings in **each half** of the selected UTC period, at least 10% period time span within each half, and at least 50% total period span. Early and late medians are compared; a direction is named only when their difference exceeds both twice the sensor-resolution floor (1 bpm, 1% SpO₂, 0.1 °C) and three times the pooled median absolute deviation around the half-window medians. Otherwise the summary says “little change” when evidence is adequate, or “insufficient reliable data.” These are presentation-only trend criteria, not Part 1 anomaly, readiness, alert or resolution thresholds. A lone outlier cannot set the median direction.
+
+Personalized changes describe deviation from a patient's established observed baseline; fixed-rule health alerts are separate lifecycle records. “Returned close to the personal baseline” is used only when a resolved insight's resolution time matches the latest stored `usual` Part 1 evaluation and no active insight remains for that metric. Other resolved insights are simply called resolved, because a reversal can also close an insight. No phrase asserts a return to a fixed normal health range. Main text is calm and non-diagnostic; technical counts and rule evidence are available in expandable details. Sensor temperature is not clinical core temperature. The summary is caregiver awareness support, not diagnosis or treatment advice.
+
+All computation stays inside the authenticated browser session on already permitted RLS-protected data. No summary table, migration, Edge Function, external AI/LLM service, API key, usage fee, health-data telemetry, or external health-data request is required. There are no AI-generated notifications. Verify with `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`, and `npm run test:e2e`; `src/summaries/summary.test.ts` covers rule and isolation cases. Manual production review should compare the summary with owned History, Insights and Alerts without creating artificial patient readings. Physical-device confirmation is a separate future verification step.
 
 ## Web application
+
+### Splash and first-use introduction
+
+Every fresh app load shows the dark CareLink splash while the existing Supabase provider restores or checks the session. The splash has a 180 ms minimum display and a 180 ms fade, then promptly releases the route when authentication is known; an offline or configuration failure goes to the existing status screen rather than trapping the user. The splash and two introduction screens use local SVG artwork, CSS motion, safe-area spacing and no internal app navigation. Reduced-motion preferences disable the nonessential animations. The launch manifest and initial theme color use the same dark navy as the splash; the existing service worker, precache, push and notification-click behavior are unchanged.
+
+For a first visit without a session, `/` leads from splash to two introduction pages and then to the **existing** sign-in page. Continue advances to page two; Skip from either page finishes immediately. A valid restored session goes straight from splash to the Dashboard. A previously completed introduction is not replayed on later signed-out launches. Logout still uses the existing notification-disable and secure Supabase sign-out path, then routes directly to sign-in. Direct protected routes, confirmation callbacks and password recovery bypass the first-use redirect and continue through their existing guards. A signed-in caregiver can choose **View introduction** in Profile; replay keeps the session, and Skip or Back to profile returns to Profile. Browser Back leaves the replay for Profile.
+
+Only `carelink-onboarding-completed-v1=complete` is stored locally. It contains no account, patient, health or credential data, is not user metadata, and survives logout and ordinary service-worker updates. If storage is restricted, the current visit still completes without crashing, but a later reload may show the introduction again. Clearing site data or reinstalling the PWA can likewise reset this local marker. No database, Edge Function, firmware or dependency change was needed for app entry. `src/entry/onboarding.test.ts` and `tests/entry.spec.ts` cover the marker, route flow, replay, storage restrictions, accessibility and responsive entry screens; run the verification commands below.
 
 Requires Node.js 22.12+ and npm.
 
@@ -80,7 +139,7 @@ npm run dev
 
 The browser `.env` contains `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and the safe public `VITE_CARELINK_VAPID_PUBLIC_KEY`. Never put a service-role key, VAPID private key, worker secret, device credential or pairing code in a `VITE_*` variable. Auth uses persisted PKCE sessions. Browser roles can select only the device, measurements, alerts and push subscriptions related to their owned account; they cannot ingest readings or access credential hashes.
 
-The shared `DeviceProvider` fetches up to 2,000 measurements from the last 30 days and separately fetches the latest row as a fallback. It refreshes once per minute only while the tab is visible and online, and refreshes when the tab becomes visible or the browser reconnects. Dashboard, History and Location map database rows into the established chart and GPS models. A paired device with no measurements shows honest empty states. The sample adapter and demo controls are enabled only in test builds, so production never combines sample readings with wearable readings.
+The shared `DeviceProvider` fetches up to 2,000 measurements from the last 30 days for charting, the latest row as a fallback, deterministic alerts, read-only personalized baseline progress and personalized insights. Part 2 additionally fetches a complete rolling seven-day slice for summaries as described above. It refreshes once per minute only while the tab is visible and online, and refreshes when the tab becomes visible or the browser reconnects. Dashboard, History and Location map database rows into the established chart and GPS models. A paired device with no measurements shows honest empty states. The sample adapter and demo controls are enabled only in test builds, so production never combines sample readings or insights with wearable data.
 
 ## Backend contract
 
@@ -94,7 +153,7 @@ Authorization: Device <64-character credential>
 
 The body contains `firmware_version` and one to ten `measurements`. Each measurement uses a durable `message_id`, UTC `measured_at`, nullable `heart_rate`, `spo2`, `sensor_temperature` and `movement`, quality (`good`, `unstable` or `missing`), plus optional valid `latitude`, `longitude`, `gps_fix_at` and boolean `confirmed_fall`. The server validates ranges and types, rejects stale/future timestamps and deduplicates `(device_id, message_id)`. Retried packets retain their original ID and measurement time.
 
-The Stage 2–5B database definitions and checks remain in `supabase/migrations` and `supabase/tests`. Hosted functions are in `supabase/functions`. `ALLOWED_ORIGIN=http://localhost:3000` is configured on the existing CareLink project; use `ALLOWED_ORIGINS` when the exact production origin becomes known.
+The Stage 2–5B and AI Part 1 database definitions and checks remain in `supabase/migrations` and `supabase/tests`. Hosted functions are in `supabase/functions`. Personalized analysis adds no Edge Function and does not change ingestion, notification or CORS configuration.
 
 ## Trusted provisioning and pairing
 
@@ -168,7 +227,7 @@ npm run test:e2e
 npm audit
 ```
 
-The safe alert-engine fixture is `supabase/tests/stage_5a_alerts.sql`. The Stage 5B fixture is `supabase/tests/stage_5b_push.sql`; it covers no backfill, ownership/RLS, multiple subscriptions, exact-once enqueueing, lifecycle non-resends, atomic leases, delivery success, retry backoff, retry bounds and 410 invalidation. Both create isolated records inside transactions and roll back. External push HTTP is mocked in unit tests, so a passing suite does not claim a notification reached a physical phone.
+The safe alert-engine fixture is `supabase/tests/stage_5a_alerts.sql`. The Stage 5B fixture is `supabase/tests/stage_5b_push.sql`; it covers no backfill, ownership/RLS, multiple subscriptions, exact-once enqueueing, lifecycle non-resends, atomic leases, delivery success, retry backoff, retry bounds and 410 invalidation. The AI Part 1 fixture is `supabase/tests/ai_part1_personalized_insights.sql`; it covers independent readiness, quality/range filters, time spread, leakage and alert-period exclusions, median/MAD and zero-MAD fallback, sustained higher/lower changes, absolute floors, lifecycle, idempotency, active-row concurrency constraints, RLS/privileges, fixed-alert preservation and absence of push delivery. All fixtures use isolated synthetic records inside transactions and roll back. External push HTTP is mocked in unit tests, so a passing suite does not claim a notification reached a physical phone.
 
 The web tests use an isolated test-mode adapter. Unit tests cover real measurement mapping, null/quality behavior and GPS fix selection. Database tests cover pairing, RLS, ingestion, null preservation, retry deduplication and revocation. Physical verification still requires flashing the real NodeMCU-32S, observing sensor cadence and reset recovery, interrupting Wi-Fi to exercise the LittleFS queue, and confirming delayed rows arrive once each with their original timestamps.
 
@@ -187,6 +246,6 @@ Use this physical end-to-end checklist after provisioning:
 
 ## Later stages
 
-Stage 5C remains responsible for AI-assisted analysis, personalized caregiver-approved thresholds/baselines and reporting. Stage 5B performs no AI or machine-learning inference.
+Future work may include caregiver-reviewed export/reporting and physical-device validation. Physical confirmed-fall upload remains a separate, explicitly authorized firmware stage. AI-generated push notifications, disease prediction, treatment recommendations and silent threshold changes are not part of this implementation.
 
 All thresholds and alerts are prototype monitoring aids. They are not medically validated diagnostic criteria and do not establish a diagnosis.

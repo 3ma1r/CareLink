@@ -1,6 +1,17 @@
 -- Stage 5B outbox, ownership, retry and invalidation tests. Everything is rolled back.
 begin;
 
+-- Keep the worker fixture isolated when production already has real delivery
+-- rows. These temporary scheduling changes are held only inside this rollback.
+create temporary table stage5b_preexisting_deliveries on commit drop as
+select id from private.push_notification_deliveries;
+update private.push_notification_deliveries delivery set
+  next_attempt_at=greatest(delivery.next_attempt_at,now()+interval '1 day'),
+  lease_expires_at=case when delivery.status='processing'
+    then greatest(coalesce(delivery.lease_expires_at,now()),now()+interval '1 day')
+    else delivery.lease_expires_at end
+where delivery.id in (select id from stage5b_preexisting_deliveries);
+
 -- The subscription Edge Function uses service_role after it validates the
 -- caregiver JWT. Missing table grants make every status/register request fail.
 do $$ begin
@@ -52,7 +63,11 @@ insert into public.push_subscriptions(caregiver_id,endpoint,p256dh,auth_key,devi
 ('88888888-8888-4888-8888-888888888888','https://push.example/other-one',repeat('E',65),repeat('F',22),'Other phone');
 
 do $$ begin
-  if exists(select 1 from private.push_notification_deliveries) then raise exception 'existing alert was backfilled'; end if;
+  if exists(
+    select 1 from private.push_notification_deliveries delivery
+    join public.care_alerts alert on alert.id=delivery.alert_id
+    where alert.rule_id='stage5b-before-subscription'
+  ) then raise exception 'existing alert was backfilled'; end if;
   if exists(select 1 from information_schema.columns where table_schema='private' and table_name='push_notification_deliveries' and column_name='payload') then
     raise exception 'outbox stores a notification payload';
   end if;
@@ -63,7 +78,7 @@ create temporary table stage5b_alerts(id uuid) on commit drop;
 insert into stage5b_alerts values(pg_temp.stage5b_alert('stage5b-new-alert'));
 grant select on stage5b_alerts to authenticated;
 do $$ begin
-  if (select count(*) from private.push_notification_deliveries) <> 2 then raise exception 'new alert did not enqueue two owner devices'; end if;
+  if (select count(*) from private.push_notification_deliveries where caregiver_id='77777777-7777-4777-8777-777777777777') <> 2 then raise exception 'new alert did not enqueue two owner devices'; end if;
   if exists(select 1 from private.push_notification_deliveries where caregiver_id='88888888-8888-4888-8888-888888888888') then
     raise exception 'cross-caregiver delivery was enqueued';
   end if;
@@ -78,7 +93,7 @@ update public.care_alerts set status='acknowledged' where id=(select id from sta
 update public.care_alerts set status='resolved' where id=(select id from stage5b_alerts);
 reset role;
 do $$ begin
-  if (select count(*) from private.push_notification_deliveries) <> 2 then raise exception 'alert update generated another delivery'; end if;
+  if (select count(*) from private.push_notification_deliveries where caregiver_id='77777777-7777-4777-8777-777777777777') <> 2 then raise exception 'alert update generated another delivery'; end if;
 end $$;
 
 -- Subscription RLS exposes only the signed-in caregiver's own rows.

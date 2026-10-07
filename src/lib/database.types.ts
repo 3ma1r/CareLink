@@ -1,6 +1,43 @@
 export type Database = {
   public: {
     Tables: {
+      personalized_baselines: {
+        Row: {
+          id:string; patient_id:string; device_id:string
+          metric:'heart_rate'|'spo2'|'temperature'; readiness:'learning'|'ready'
+          sample_count:number; required_sample_count:number
+          distinct_day_count:number; required_day_count:number
+          coverage_hours:number; required_coverage_hours:number
+          baseline_median:number|null; median_absolute_deviation:number|null
+          robust_scale:number|null; baseline_window_start:string|null
+          baseline_window_end:string|null; baseline_excluded_before:string
+          latest_evaluation_state:'learning'|'usual'|'unusual'|'insufficient_recent_data'|null
+          latest_recent_sample_count:number|null; latest_evaluated_at:string|null
+          algorithm_version:string; calculated_at:string; updated_at:string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      personalized_insights: {
+        Row: {
+          id:string; patient_id:string; device_id:string
+          metric:'heart_rate'|'spo2'|'temperature'; direction:'higher'|'lower'
+          status:'active'|'resolved'; confidence:'low'|'moderate'|'high'
+          evaluation_window_start:string; evaluation_window_end:string
+          baseline_sample_count:number; recent_sample_count:number
+          baseline_median:number; recent_median:number; deviation:number
+          robust_score:number; direction_consistency:number
+          first_observed_at:string; last_observed_at:string; occurrence_count:number
+          first_source_measurement_id:number; last_source_measurement_id:number
+          first_evaluation_id:string; last_evaluation_id:string
+          resolved_at:string|null; algorithm_version:string
+          created_at:string; updated_at:string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           id:string; caregiver_id:string; endpoint:string; p256dh:string; auth_key:string

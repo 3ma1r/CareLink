@@ -16,6 +16,8 @@ import Alerts from './pages/Alerts'
 import Location from './pages/Location'
 import Profile from './pages/Profile'
 import PairDevice from './pages/PairDevice'
+import { OnboardingScreens, SplashScreen } from './entry/EntryScreens'
+import { hasCompletedOnboarding, markOnboardingCompleted } from './entry/onboarding'
 
 const navigation = [
   { path: '/', label: 'Dashboard', icon: House },
@@ -61,7 +63,7 @@ function AppShell() {
     <div className="demo-strip"><div><span><FlaskConical size={13}/>{sampleMode ? 'Demo — sample health data' : device ? 'Live — paired wearable data' : 'Monitoring inactive — no wearable paired'}</span>{sampleMode&&<span className="sample-clock">14 Sep 2026 · 12:00 GST <i/>Fixed sample timeline</span>}</div></div>
     {!online&&<div className="offline-banner" role="status"><WifiOff size={18}/>You’re offline. Account changes are disabled and {sampleMode ? 'the displayed readings are cached samples.' : 'the displayed wearable readings may be stale.'}</div>}
     <main ref={main} tabIndex={-1} id="main-content" className="main-content"><Routes><Route path="/" element={<Dashboard/>}/><Route path="/history" element={<History/>}/><Route path="/alerts" element={<Alerts/>}/><Route path="/location" element={<Location/>}/><Route path="/profile" element={<Profile/>}/><Route path="/pair-device" element={<PairDevice/>}/><Route path="*" element={<div className="empty-state"><h1>Let’s get you back to care.</h1><p>This page isn’t available.</p><Link className="button primary" to="/">Go to dashboard</Link></div>}/></Routes>
-      {sampleMode&&<section className="demo-controls"><button className="demo-controls-toggle" aria-expanded={controls} aria-controls="demo-controls-panel" onClick={()=>setControls(!controls)}><span><SlidersHorizontal size={16}/>Demo controls<Badge tone="muted">Prototype tools</Badge></span><span>{scenarios.find((s)=>s.value===scenario)?.label}<ChevronDown size={16} className={controls?'rotated':''}/></span></button>{controls&&<div id="demo-controls-panel" className="demo-controls-panel"><p>Explore sample states. These controls never change the signed-in account or patient ownership.</p><div className="demo-controls-fields"><label>Device & data scenario<select value={scenario} onChange={(e)=>setScenario(e.target.value as Scenario)}>{scenarios.map((s)=><option key={s.value} value={s.value}>{s.label}</option>)}</select></label><label>AI presentation preview<select value={aiState} onChange={(e)=>setAiState(e.target.value as AIState)}><option value="awaiting">Awaiting analysis — not connected</option><option value="learning">Demo: Learning baseline</option><option value="usual">Demo: Usual pattern</option><option value="unusual">Demo: Unusual pattern</option><option value="insufficient">Demo: Insufficient data</option><option value="unavailable">Demo: Service unavailable</option></select></label></div><p className="data-note" role="status">Active scenario: {scenarios.find((s)=>s.value===scenario)?.label}. Scenario changes reset alert actions. Sample clock stays fixed.</p></div>}</section>}
+      {sampleMode&&<section className="demo-controls"><button className="demo-controls-toggle" aria-expanded={controls} aria-controls="demo-controls-panel" onClick={()=>setControls(!controls)}><span><SlidersHorizontal size={16}/>Demo controls<Badge tone="muted">Prototype tools</Badge></span><span>{scenarios.find((s)=>s.value===scenario)?.label}<ChevronDown size={16} className={controls?'rotated':''}/></span></button>{controls&&<div id="demo-controls-panel" className="demo-controls-panel"><p>Explore sample states. These controls never change the signed-in account or patient ownership.</p><div className="demo-controls-fields"><label>Device & data scenario<select value={scenario} onChange={(e)=>setScenario(e.target.value as Scenario)}>{scenarios.map((s)=><option key={s.value} value={s.value}>{s.label}</option>)}</select></label><label>Personalized insight preview<select value={aiState} onChange={(e)=>setAiState(e.target.value as AIState)}><option value="awaiting">Demo: No analysis data</option><option value="learning">Demo: Partial baseline learning</option><option value="usual">Demo: Usual recent pattern</option><option value="unusual">Demo: Active personalized insight</option><option value="resolved">Demo: Resolved personalized insight</option><option value="insufficient">Demo: Insufficient recent data</option><option value="unavailable">Demo: Service unavailable</option></select></label></div><p className="data-note" role="status">Active scenario: {scenarios.find((s)=>s.value===scenario)?.label}. Scenario changes reset alert actions. Sample clock stays fixed.</p></div>}</section>}
       <footer className="app-footer"><PrototypeNote/><span>CareLink <span className="text-accent">♥</span> Care, connected.</span></footer>
     </main>
     <nav className="bottom-nav" aria-label="Mobile navigation">{navigation.map(({path,label,icon:Icon})=><NavLink key={path} to={path} end={path==='/' } className={({isActive})=>isActive||(path==='/'&&location.pathname==='/history')?'active':''}><span><Icon size={23}/>{label==='Alerts'&&activeCount>0&&<i className="mobile-alert-dot"/>}</span><span>{label}</span></NavLink>)}</nav>
@@ -69,7 +71,47 @@ function AppShell() {
 }
 
 export default function App() {
+  const auth = useAuth()
+  const location = useLocation()
+  const [completed, setCompleted] = useState(hasCompletedOnboarding)
+  const [minimumShown, setMinimumShown] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [booting, setBooting] = useState(true)
+  const authLanding = useRef((() => {
+    const query = new URLSearchParams(window.location.search)
+    return ['code', 'token_hash', 'type', 'error', 'error_description'].some((key) => query.has(key)) ||
+      /access_token|refresh_token|type=recovery|error_description/.test(window.location.hash)
+  })())
+  useEffect(() => {
+    const timer = window.setTimeout(() => setMinimumShown(true), 180)
+    return () => window.clearTimeout(timer)
+  }, [])
+  useEffect(() => {
+    if (!booting || !minimumShown || auth.status === 'loading') return
+    setLeaving(true)
+    const timer = window.setTimeout(() => setBooting(false), 180)
+    return () => window.clearTimeout(timer)
+  }, [auth.status, booting, minimumShown])
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const meta = document.querySelector('meta[name="theme-color"]')
+      const entry = booting || location.pathname === '/introduction'
+      meta?.setAttribute('content', entry ? '#061822' : document.documentElement.dataset.theme === 'dark' ? '#0c2229' : '#007b78')
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [booting, location.pathname])
+  if (booting) return <SplashScreen leaving={leaving} />
+  if (location.pathname === '/' && auth.status === 'signed-out' && !completed && !authLanding.current)
+    return <Navigate to="/introduction" replace />
+  const completeOnboarding = () => {
+    markOnboardingCompleted()
+    setCompleted(true)
+  }
+  const replay = new URLSearchParams(location.search).get('replay') === '1'
   return <Routes>
+    <Route path="/introduction" element={auth.status === 'offline' || auth.status === 'configured-error' ? <AuthStatusScreen /> : replay
+      ? auth.status === 'signed-in' ? <OnboardingScreens replay onComplete={completeOnboarding} /> : <Navigate to="/sign-in" replace />
+      : completed || auth.status === 'signed-in' ? <Navigate to={auth.status === 'signed-in' ? '/' : '/sign-in'} replace /> : <OnboardingScreens replay={false} onComplete={completeOnboarding} />} />
     <Route path="/welcome" element={<PublicOnly><Welcome/></PublicOnly>}/>
     <Route path="/sign-in" element={<PublicOnly><SignIn/></PublicOnly>}/>
     <Route path="/register" element={<PublicOnly><Register/></PublicOnly>}/>

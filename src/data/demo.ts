@@ -3,7 +3,7 @@ export type Quality = 'Good' | 'Unstable' | 'Missing'
 export type Scenario =
   'typical' | 'offline' | 'unstable' | 'staleGps' | 'noGps' | 'sos' | 'fall' | 'empty'
 export type AlertStatus = 'Active' | 'Acknowledged' | 'Resolved'
-export type AIState = 'awaiting' | 'learning' | 'usual' | 'unusual' | 'insufficient' | 'unavailable'
+export type AIState = 'awaiting' | 'learning' | 'usual' | 'unusual' | 'resolved' | 'insufficient' | 'unavailable'
 export interface Reading {
   id: string
   time: number

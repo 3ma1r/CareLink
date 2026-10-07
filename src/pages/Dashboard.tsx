@@ -40,6 +40,7 @@ import {
 } from '../components/UI'
 import { HealthChart, MovementChart } from '../components/Charts'
 import { AIInsights } from '../components/AIInsights'
+import { PersonalizedHealthSummary } from '../components/PersonalizedHealthSummary'
 import { useDevice } from '../device/DeviceProvider'
 const icons = { heartRate: Heart, spo2: Droplets, temperature: Thermometer }
 export default function Dashboard() {
@@ -242,9 +243,10 @@ export default function Dashboard() {
               </span>
             )}
           </Link>
-          <AIInsights />
         </aside>
       </div>
+      <PersonalizedHealthSummary />
+      <AIInsights />
       <div className="page-bottom-note">
         <Badge tone="muted">{sampleMode ? 'Demo — sample data' : 'Paired wearable data'}</Badge>
         <span>Thoughtfully connected. Always with care.</span>

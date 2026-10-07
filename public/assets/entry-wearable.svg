@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 560" role="img" aria-labelledby="title">
+  <title id="title">CareLink wearable and three connected health metric cards</title>
+  <defs>
+    <linearGradient id="strap" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#29404b"/><stop offset=".43" stop-color="#0a1b25"/><stop offset="1" stop-color="#1c3540"/></linearGradient>
+    <linearGradient id="case" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#657d86"/><stop offset=".3" stop-color="#243e48"/><stop offset=".65" stop-color="#091d27"/><stop offset="1" stop-color="#45606b"/></linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b3440"/><stop offset="1" stop-color="#071923"/></linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#173640" stop-opacity=".82"/><stop offset="1" stop-color="#09212a" stop-opacity=".92"/></linearGradient>
+    <filter id="shadow" x="-35%" y="-35%" width="170%" height="180%"><feDropShadow dx="0" dy="22" stdDeviation="19" flood-color="#03131a" flood-opacity=".72"/></filter>
+    <filter id="glow"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <g fill="none" stroke="#76e8d4" stroke-width="2" opacity=".75">
+    <path d="M335 213c61-3 65-117 145-117"/><path d="M351 286c72 0 78 3 129 3"/><path d="M340 343c67 3 70 112 143 112"/>
+  </g>
+  <g fill="#8cf6df"><circle cx="481" cy="96" r="7"/><circle cx="479" cy="289" r="7"/><circle cx="483" cy="455" r="7"/><circle cx="356" cy="213" r="7"/></g>
+  <g filter="url(#shadow)" transform="translate(62 95) rotate(-9 178 190)">
+    <path d="M104 105V52C104 12 131-9 168-10h46c40 0 66 28 66 65v53l-37 15H142Z" fill="url(#strap)" stroke="#46606a" stroke-width="3"/>
+    <path d="M107 280v95c0 55 32 99 78 100 49 1 77-39 78-102v-93l-43-20h-75Z" fill="url(#strap)" stroke="#344b55" stroke-width="3"/>
+    <path d="M123 322c5 31 14 59 28 77M245 322c-5 31-14 59-28 77" fill="none" stroke="#4b6671" stroke-width="4" opacity=".45"/>
+    <g fill="#071b23" stroke="#304a55" stroke-width="2"><rect x="170" y="348" width="30" height="8" rx="4"/><rect x="170" y="372" width="30" height="8" rx="4"/><rect x="170" y="396" width="30" height="8" rx="4"/><rect x="170" y="420" width="30" height="8" rx="4"/></g>
+    <rect x="45" y="96" width="291" height="244" rx="55" fill="url(#case)" stroke="#8ea8ab" stroke-width="4"/>
+    <rect x="57" y="108" width="267" height="220" rx="46" fill="#061923" stroke="#1d4450" stroke-width="4"/>
+    <rect x="66" y="117" width="249" height="202" rx="39" fill="url(#face)"/>
+    <path d="M199 250 156 207c-11-11-8-29 5-36 15-9 29 0 38 12 10-12 24-21 39-12 13 7 16 25 5 36l-44 43Z" fill="none" stroke="#95f8e5" stroke-width="9" stroke-linejoin="round"/>
+    <circle cx="251" cy="253" r="14" fill="none" stroke="#95f8e5" stroke-width="9"/>
+    <rect x="333" y="185" width="12" height="39" rx="6" fill="#1c3942" stroke="#62808a" stroke-width="2"/>
+  </g>
+  <g fill="url(#card)" stroke="#589798" stroke-width="2">
+    <rect x="480" y="16" width="173" height="153" rx="30"/><rect x="487" y="208" width="173" height="153" rx="30"/><rect x="480" y="398" width="173" height="153" rx="30"/>
+  </g>
+  <g fill="none" stroke="#8ef6df" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M566 80c-11-15-31-3-25 13 3 9 25 29 25 29s22-20 25-29c6-16-14-28-25-13Z"/><path d="m547 103 12-1 7-11 8 22 5-10 12-1"/>
+    <path d="M572 238c-11 19-22 29-22 42a22 22 0 0 0 44 0c0-13-11-23-22-42Z"/><path d="M558 281c1 6 4 9 9 10"/>
+    <rect x="556" y="430" width="20" height="58" rx="10"/><path d="M556 478a21 21 0 1 0 20 0"/><path d="M566 454v36"/>
+  </g>
+  <g fill="#e5f7f4" font-family="Arial, sans-serif" font-size="17" text-anchor="middle"><text x="566" y="143">Heart Rate</text><text x="574" y="335">SpO₂</text><text x="566" y="530">Temperature</text></g>
+  <g fill="#66d4c2" opacity=".78"><rect x="531" y="158" width="5" height="7" rx="2"/><rect x="540" y="155" width="5" height="10" rx="2"/><rect x="549" y="153" width="5" height="12" rx="2"/><rect x="558" y="156" width="5" height="9" rx="2"/><rect x="567" y="151" width="5" height="14" rx="2"/><rect x="576" y="154" width="5" height="11" rx="2"/><rect x="585" y="158" width="5" height="7" rx="2"/></g>
+</svg>

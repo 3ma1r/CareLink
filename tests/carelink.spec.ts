@@ -13,6 +13,29 @@ async function noOverflow(page: Page) {
   )
 }
 
+test('summary controls are accessible and sample mode never presents fabricated production conclusions', async ({ page }) => {
+  await page.goto('/')
+  const section = page.getByRole('region', { name: 'Personalized Health Summary' })
+  await expect(section).toBeVisible()
+  await expect(section).toContainText('Sample mode: no production health summary is shown')
+  await expect(section.locator('.health-summary-overview')).toHaveCount(0)
+  const periods = section.getByRole('group', { name: 'Health summary period' })
+  await expect(periods.getByRole('button', { name: 'Past 24 hours' })).toHaveAttribute('aria-pressed', 'true')
+  await periods.getByRole('button', { name: 'Past 7 days' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(periods.getByRole('button', { name: 'Past 7 days' })).toHaveAttribute('aria-pressed', 'true')
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Use ${theme} theme` }).click()
+      await expect(section).toBeVisible()
+      await noOverflow(page)
+    }
+  }
+  const audit = await new AxeBuilder({ page }).include('.health-summary-section').analyze()
+  expect(audit.violations).toEqual([])
+})
+
 test('all routes render at phone, tablet, and desktop widths in both themes', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
@@ -39,7 +62,7 @@ test('all routes render at phone, tablet, and desktop widths in both themes', as
   expect(errors).toEqual([])
 })
 
-test('theme, patient editing, navigation, and all AI presentation states work', async ({
+test('theme, patient editing, navigation, and personalized insight states work', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -61,12 +84,30 @@ test('theme, patient editing, navigation, and all AI presentation states work', 
   await expect(page.locator('.patient-name')).toContainText('Ahmed Ali')
   await expect(page.locator('.patient-name')).toContainText('Sample location')
   await setScenario(page, 'Typical valid readings')
-  for (const state of ['learning', 'usual', 'unusual', 'insufficient', 'unavailable']) {
-    await page.getByLabel('AI presentation preview').selectOption(state)
-    await expect(page.locator('.ai-card')).toContainText('Demo only — no AI analysis performed')
-  }
-  await page.getByLabel('AI presentation preview').selectOption('awaiting')
-  await expect(page.locator('.ai-card')).toContainText('Awaiting analysis — AI not connected')
+  const preview = page.getByLabel('Personalized insight preview')
+  const section = page.locator('.personalized-section')
+  await preview.selectOption('learning')
+  await expect(section).toContainText('Learning heart-rate baseline')
+  await expect(section).toContainText('18 of 30 good readings')
+  await expect(section).toContainText('SpO₂')
+  await expect(section).toContainText('Personal baseline ready')
+  await preview.selectOption('usual')
+  await expect(section).toContainText('Latest evaluated patterns were close to baseline')
+  await preview.selectOption('unusual')
+  await expect(section).toContainText(
+    'Heart rate has been consistently higher than this patient’s recent baseline.',
+  )
+  await expect(section).toContainText('Based on 3 recent good-quality readings')
+  await preview.selectOption('resolved')
+  await section.getByText('Resolved personalized insights (1)').click()
+  await expect(section.locator('.personalized-insight.resolved')).toContainText('Resolved')
+  await preview.selectOption('insufficient')
+  await expect(section).toContainText('More recent good-quality data is needed')
+  await preview.selectOption('unavailable')
+  await expect(section.getByRole('alert')).toContainText('Health alerts continue to work independently')
+  await preview.selectOption('awaiting')
+  await expect(section).toContainText('No personalized insight yet')
+  await expect(section.locator('.baseline-card.empty')).toHaveCount(3)
 })
 
 test('history date, metric and range controls update real samples and PDF stays a preview', async ({
